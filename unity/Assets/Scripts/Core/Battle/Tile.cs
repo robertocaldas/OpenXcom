@@ -1,3 +1,5 @@
+using OpenXcom.Core.Rules;
+
 namespace OpenXcom.Core.Battle
 {
     /// <summary>
@@ -19,5 +21,11 @@ namespace OpenXcom.Core.Battle
 
         /// <summary>The unit currently occupying this tile, if any.</summary>
         public BattleUnit Occupant;
+
+        /// <summary>Resolved per-part terrain records, set by MapGenerator. Null = nothing in that slot.</summary>
+        public MapDataTile Floor;
+        public MapDataTile WestWall;
+        public MapDataTile NorthWall;
+        public MapDataTile Object;
     }
 }
