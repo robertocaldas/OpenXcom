@@ -179,7 +179,41 @@ namespace OpenXcom.Core.Battle
         /// membership/count alone would be wrong here.
         /// </summary>
         public bool IsBattleOver =>
-            !Units.Exists(u => u.Faction == Faction.Player && u.IsAlive) ||
-            !Units.Exists(u => u.Faction == Faction.Hostile && u.IsAlive);
+            Units.Count > 0 && (
+                !Units.Exists(u => u.Faction == Faction.Player && u.IsAlive) ||
+                !Units.Exists(u => u.Faction == Faction.Hostile && u.IsAlive));
+
+
+        /// <summary>
+        /// Switches CurrentTurn (Player&lt;-&gt;Hostile - [SIMPLIFIED] 2-way
+        /// cycle, no Neutral/civilian phase since this slice has no
+        /// civilian units), refreshes TU/energy for every living unit of
+        /// the NEW current faction only (port of SavedBattleGame::endTurn's
+        /// per-faction refresh, src/Battlescape/SavedBattleGame.cpp:1599-1602),
+        /// enqueues one TurnChangedEvent, then checks IsBattleOver exactly
+        /// once (matching the real engine's end-of-turn-only tally timing,
+        /// BattlescapeGame.cpp:652) and enqueues one BattleOverEvent if the
+        /// battle just ended.
+        /// </summary>
+        public void EndTurn()
+        {
+            CurrentTurn = CurrentTurn == Faction.Player ? Faction.Hostile : Faction.Player;
+
+            foreach (var unit in Units)
+                if (unit.Faction == CurrentTurn && unit.IsAlive)
+                    unit.RefreshForNewTurn();
+
+            Enqueue(new TurnChangedEvent(CurrentTurn));
+
+            if (IsBattleOver)
+            {
+                bool playerAlive = Units.Exists(u => u.Faction == Faction.Player && u.IsAlive);
+                bool hostileAlive = Units.Exists(u => u.Faction == Faction.Hostile && u.IsAlive);
+                var outcome = playerAlive && !hostileAlive ? BattleOutcome.PlayerVictory
+                    : !playerAlive && hostileAlive ? BattleOutcome.HostileVictory
+                    : BattleOutcome.Draw;
+                Enqueue(new BattleOverEvent(outcome));
+            }
+        }
     }
 }

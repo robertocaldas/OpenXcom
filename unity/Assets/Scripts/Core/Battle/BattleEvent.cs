@@ -72,4 +72,21 @@ namespace OpenXcom.Core.Battle
             Unit = unit;
         }
     }
+
+    public enum BattleOutcome
+    {
+        PlayerVictory,
+        HostileVictory,
+        Draw,
+    }
+
+    public sealed class BattleOverEvent : BattleEvent
+    {
+        public BattleOutcome Outcome { get; }
+
+        public BattleOverEvent(BattleOutcome outcome)
+        {
+            Outcome = outcome;
+        }
+    }
 }
