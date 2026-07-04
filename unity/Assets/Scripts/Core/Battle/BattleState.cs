@@ -4,6 +4,19 @@ using OpenXcom.Core.Rules;
 
 namespace OpenXcom.Core.Battle
 {
+    public enum MoveOutcome
+    {
+        Failed,
+        Partial,
+        Full,
+    }
+
+    public sealed class MoveResult
+    {
+        public MoveOutcome Outcome;
+        public IReadOnlyList<Position> Path;
+    }
+
     /// <summary>
     /// The battle's mutable runtime container: the TileGrid, all units, whose
     /// turn it is, and the outbound BattleEvent queue. Mirrors OXCE's
@@ -62,6 +75,45 @@ namespace OpenXcom.Core.Battle
             }
 
             return state;
+        }
+
+        /// <summary>
+        /// Finds a path from the unit's current position to target and walks
+        /// as far as its TU budget allows, spending TU per step, updating
+        /// occupancy, and enqueueing one UnitMovedEvent covering the tiles
+        /// actually walked (never enqueued for a no-op or failed move).
+        /// </summary>
+        public MoveResult TryMove(BattleUnit unit, Position target)
+        {
+            if (unit.Position == target)
+                return new MoveResult { Outcome = MoveOutcome.Full, Path = System.Array.Empty<Position>() };
+
+            var fullPath = Pathfinding.FindPath(Grid, unit.Position, target);
+            if (fullPath == null || fullPath.Count == 0)
+                return new MoveResult { Outcome = MoveOutcome.Failed, Path = System.Array.Empty<Position>() };
+
+            var walked = new List<Position>();
+            var previous = unit.Position;
+
+            foreach (var step in fullPath)
+            {
+                if (!unit.CanSpend(step.StepCost))
+                    break;
+
+                unit.Spend(step.StepCost);
+                Grid[previous].Occupant = null;
+                unit.Position = step.Position;
+                Grid[step.Position].Occupant = unit;
+                walked.Add(step.Position);
+                previous = step.Position;
+            }
+
+            if (walked.Count == 0)
+                return new MoveResult { Outcome = MoveOutcome.Failed, Path = System.Array.Empty<Position>() };
+
+            Enqueue(new UnitMovedEvent(unit, walked));
+            var outcome = walked.Count == fullPath.Count ? MoveOutcome.Full : MoveOutcome.Partial;
+            return new MoveResult { Outcome = outcome, Path = walked };
         }
     }
 }

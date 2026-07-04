@@ -95,5 +95,92 @@ namespace OpenXcom.Core.Tests
             Assert.IsType<UnitMovedEvent>(drained[1]);
             Assert.Empty(state.DequeueEvents()); // queue is now empty
         }
+
+        [Fact]
+        public void TryMove_FullBudget_MovesAllTheWayAndEnqueuesOneEvent()
+        {
+            var grid = new TileGrid(5, 1, 1);
+            var floor = new MapDataTile { TuWalk = 4 };
+            for (int x = 0; x < 5; x++) grid.At(x, 0, 0).Floor = floor;
+
+            var unit = new BattleUnit(RuleUnit.Soldier, Faction.Player) { Position = new Position(0, 0, 0) };
+            unit.TimeUnits = 100;
+            grid.At(0, 0, 0).Occupant = unit;
+            var state = new BattleState(grid);
+            state.Units.Add(unit);
+
+            var result = state.TryMove(unit, new Position(3, 0, 0));
+
+            Assert.Equal(MoveOutcome.Full, result.Outcome);
+            Assert.Equal(3, result.Path.Count);
+            Assert.Equal(new Position(3, 0, 0), unit.Position);
+            Assert.Equal(100 - 3 * 4, unit.TimeUnits);
+            Assert.Same(unit, grid.At(3, 0, 0).Occupant);
+            Assert.Null(grid.At(0, 0, 0).Occupant);
+
+            var events = state.DequeueEvents();
+            Assert.Single(events);
+            var moved = Assert.IsType<UnitMovedEvent>(events[0]);
+            Assert.Equal(3, moved.Path.Count);
+        }
+
+        [Fact]
+        public void TryMove_InsufficientBudget_StopsAtLastAffordableTile()
+        {
+            var grid = new TileGrid(5, 1, 1);
+            var floor = new MapDataTile { TuWalk = 4 };
+            for (int x = 0; x < 5; x++) grid.At(x, 0, 0).Floor = floor;
+
+            var unit = new BattleUnit(RuleUnit.Soldier, Faction.Player) { Position = new Position(0, 0, 0) };
+            unit.TimeUnits = 9; // enough for 2 steps (8 TU), not 3 (12 TU)
+            grid.At(0, 0, 0).Occupant = unit;
+            var state = new BattleState(grid);
+            state.Units.Add(unit);
+
+            var result = state.TryMove(unit, new Position(3, 0, 0));
+
+            Assert.Equal(MoveOutcome.Partial, result.Outcome);
+            Assert.Equal(2, result.Path.Count);
+            Assert.Equal(new Position(2, 0, 0), unit.Position);
+            Assert.Equal(1, unit.TimeUnits); // 9 - 8
+            Assert.Same(unit, grid.At(2, 0, 0).Occupant);
+
+            var events = state.DequeueEvents();
+            Assert.Single(events);
+        }
+
+        [Fact]
+        public void TryMove_BlockedDestination_FailsWithNoTuSpentAndNoEvent()
+        {
+            var grid = new TileGrid(2, 1, 1); // no floors -> nothing walkable
+            var unit = new BattleUnit(RuleUnit.Soldier, Faction.Player) { Position = new Position(0, 0, 0) };
+            int startingTu = unit.TimeUnits;
+            var state = new BattleState(grid);
+            state.Units.Add(unit);
+
+            var result = state.TryMove(unit, new Position(1, 0, 0));
+
+            Assert.Equal(MoveOutcome.Failed, result.Outcome);
+            Assert.Empty(result.Path);
+            Assert.Equal(startingTu, unit.TimeUnits);
+            Assert.Equal(new Position(0, 0, 0), unit.Position);
+            Assert.Empty(state.DequeueEvents());
+        }
+
+        [Fact]
+        public void TryMove_AlreadyAtTarget_ReturnsFullWithEmptyPath()
+        {
+            var grid = new TileGrid(1, 1, 1);
+            grid.At(0, 0, 0).Floor = new MapDataTile { TuWalk = 4 };
+            var unit = new BattleUnit(RuleUnit.Soldier, Faction.Player) { Position = new Position(0, 0, 0) };
+            var state = new BattleState(grid);
+            state.Units.Add(unit);
+
+            var result = state.TryMove(unit, new Position(0, 0, 0));
+
+            Assert.Equal(MoveOutcome.Full, result.Outcome);
+            Assert.Empty(result.Path);
+            Assert.Empty(state.DequeueEvents()); // no-op move enqueues nothing
+        }
     }
 }
