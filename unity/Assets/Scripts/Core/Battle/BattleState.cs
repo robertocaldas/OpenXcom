@@ -176,13 +176,16 @@ namespace OpenXcom.Core.Battle
         /// liveSoldiers == 0"), ignoring the VIP-escort/must-destroy
         /// objective exceptions (not applicable to a plain skirmish). Checks
         /// each unit's IsAlive - dead units stay in the Units list, so list
-        /// membership/count alone would be wrong here.
+        /// membership/count alone would be wrong here. The Units.Count > 0
+        /// guard exists because List.Exists on an empty list returns false
+        /// for any predicate, so !Exists(...) || !Exists(...) would
+        /// otherwise be vacuously true with zero units - a battle that
+        /// hasn't started (no units spawned yet) is not "over".
         /// </summary>
         public bool IsBattleOver =>
             Units.Count > 0 && (
                 !Units.Exists(u => u.Faction == Faction.Player && u.IsAlive) ||
                 !Units.Exists(u => u.Faction == Faction.Hostile && u.IsAlive));
-
 
         /// <summary>
         /// Switches CurrentTurn (Player&lt;-&gt;Hostile - [SIMPLIFIED] 2-way
