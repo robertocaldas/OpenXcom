@@ -6,8 +6,7 @@ namespace OpenXcom.Core.Tests.Convert
 {
     public class McdDecoderTests
     {
-        private static readonly string DataDir =
-            Path.Combine("..", "..", "..", "..", "RawData", "Resources", "UFO");
+        private static readonly string DataDir = TestPaths.RawDataDir;
 
         private static byte[] Mcd() => File.ReadAllBytes(Path.Combine(DataDir, "TERRAIN", "CULTIVAT.MCD"));
 

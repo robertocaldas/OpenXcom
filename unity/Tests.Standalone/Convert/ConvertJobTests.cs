@@ -7,8 +7,7 @@ namespace OpenXcom.Core.Tests.Convert
 {
     public class ConvertJobTests
     {
-        private static readonly string DataDir =
-            Path.Combine("..", "..", "..", "..", "RawData", "Resources", "UFO");
+        private static readonly string DataDir = TestPaths.RawDataDir;
 
         [Fact]
         public void Run_ProducesPaletteTerrainUnitAndMapblockOutputs()

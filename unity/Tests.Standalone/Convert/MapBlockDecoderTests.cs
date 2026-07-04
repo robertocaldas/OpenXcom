@@ -6,8 +6,7 @@ namespace OpenXcom.Core.Tests.Convert
 {
     public class MapBlockDecoderTests
     {
-        private static readonly string DataDir =
-            Path.Combine("..", "..", "..", "..", "RawData", "Resources", "UFO");
+        private static readonly string DataDir = TestPaths.RawDataDir;
 
         private static byte[] MapBytes() =>
             File.ReadAllBytes(Path.Combine(DataDir, "MAPS", "CULTA00.MAP"));

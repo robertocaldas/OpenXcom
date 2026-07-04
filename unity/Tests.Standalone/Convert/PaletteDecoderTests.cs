@@ -7,8 +7,7 @@ namespace OpenXcom.Core.Tests.Convert
 {
     public class PaletteDecoderTests
     {
-        private static readonly string DataDir =
-            Path.Combine("..", "..", "..", "..", "RawData", "Resources", "UFO");
+        private static readonly string DataDir = TestPaths.RawDataDir;
 
         private static byte[] PalettesDat() =>
             File.ReadAllBytes(Path.Combine(DataDir, "GEODATA", "PALETTES.DAT"));

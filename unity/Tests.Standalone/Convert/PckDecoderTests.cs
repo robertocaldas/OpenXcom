@@ -6,8 +6,7 @@ namespace OpenXcom.Core.Tests.Convert
 {
     public class PckDecoderTests
     {
-        private static readonly string DataDir =
-            Path.Combine("..", "..", "..", "..", "RawData", "Resources", "UFO");
+        private static readonly string DataDir = TestPaths.RawDataDir;
 
         // XCOM.PCK is the standard X-COM soldier sprite set; 32x40 frames.
         private static byte[] Pck() => File.ReadAllBytes(Path.Combine(DataDir, "UNITS", "XCOM_0.PCK"));
