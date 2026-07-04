@@ -152,5 +152,72 @@ namespace OpenXcom.Core.Tests
                 }
             }
         }
+
+        [Fact]
+        public void Build_SyntheticFloorWithNoFloorFlag_TileIsNotWalkable()
+        {
+            // Index 0 is a harmless filler (real index 0 always means "nothing"
+            // per MapGenerator.Resolve's rawIndex<=0 guard); the actual NoFloor
+            // record lives at index 1, referenced by the tile's Floor=1.
+            var filler = new MapDataTile();
+            var noFloorRecord = new MapDataTile { NoFloor = true };
+            var datasetTiles = new Dictionary<string, List<MapDataTile>>
+            {
+                ["TEST"] = new() { filler, noFloorRecord },
+            };
+            var terrain = new RuleTerrain("TEST", new List<MapDataSetInfo>
+            {
+                new() { Name = "TEST", Size = 2 },
+            });
+            var block = new DataLoader.RawMapBlockData
+            {
+                Width = 1,
+                Length = 1,
+                Height = 1,
+                Tiles = new List<DataLoader.RawMapBlockTile>
+                {
+                    new() { Floor = 1, WestWall = 0, NorthWall = 0, Object = 0 },
+                },
+                RouteNodes = new List<DataLoader.RawRouteNode>(),
+            };
+
+            var grid = MapGenerator.Build(block, terrain, datasetTiles);
+
+            Assert.NotNull(grid.At(0, 0, 0).Floor);
+            Assert.True(grid.At(0, 0, 0).Floor.NoFloor);
+            Assert.False(grid.At(0, 0, 0).Walkable);
+        }
+
+        [Fact]
+        public void Build_SyntheticWestWallWithStopLOS_TileBlocksSight()
+        {
+            var filler = new MapDataTile();
+            var stopLosWall = new MapDataTile { StopLOS = true };
+            var datasetTiles = new Dictionary<string, List<MapDataTile>>
+            {
+                ["TEST"] = new() { filler, stopLosWall },
+            };
+            var terrain = new RuleTerrain("TEST", new List<MapDataSetInfo>
+            {
+                new() { Name = "TEST", Size = 2 },
+            });
+            var block = new DataLoader.RawMapBlockData
+            {
+                Width = 1,
+                Length = 1,
+                Height = 1,
+                Tiles = new List<DataLoader.RawMapBlockTile>
+                {
+                    new() { Floor = 0, WestWall = 1, NorthWall = 0, Object = 0 },
+                },
+                RouteNodes = new List<DataLoader.RawRouteNode>(),
+            };
+
+            var grid = MapGenerator.Build(block, terrain, datasetTiles);
+
+            Assert.NotNull(grid.At(0, 0, 0).WestWall);
+            Assert.True(grid.At(0, 0, 0).WestWall.StopLOS);
+            Assert.True(grid.At(0, 0, 0).BlocksSight);
+        }
     }
 }
