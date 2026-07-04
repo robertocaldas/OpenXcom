@@ -17,9 +17,13 @@ namespace OpenXcom.Core.Tests
         {
             // Newtonsoft serializes a C# byte[] as a base64 string; confirm
             // System.Text.Json round-trips that same convention correctly.
+            // Bytes {255,224,63,1,2,3,4,5} deliberately encode to a string
+            // containing '+' and '/' ("/+A/AQIDBAU=") so this test actually
+            // fails if a future change swapped to the base64url alphabet
+            // (which uses '-'/'_' instead and would reject or mis-decode this).
             string json = @"[
                 {
-                    ""Frames"": ""AQIDBAUGBwg="",
+                    ""Frames"": ""/+A/AQIDBAU="",
                     ""ScanG"": 42,
                     ""IsUfoDoor"": false,
                     ""StopLOS"": true,
@@ -43,8 +47,8 @@ namespace OpenXcom.Core.Tests
 
             Assert.Single(tiles);
             var t = tiles[0];
-            // "AQIDBAUGBwg=" base64-decodes to bytes 1,2,3,4,5,6,7,8.
-            Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7, 8 }, t.Frames);
+            // "/+A/AQIDBAU=" base64-decodes to bytes 255,224,63,1,2,3,4,5.
+            Assert.Equal(new[] { 255, 224, 63, 1, 2, 3, 4, 5 }, t.Frames);
             Assert.Equal(42, t.ScanG);
             Assert.True(t.StopLOS);
             Assert.Equal(2, t.BigWall);
