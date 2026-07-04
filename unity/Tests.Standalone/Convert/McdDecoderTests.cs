@@ -36,6 +36,8 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Equal(raw[31] != 0, r0.StopLOS);
             Assert.Equal(raw[39], (byte)r0.TuWalk);
             Assert.Equal((sbyte)raw[48], (sbyte)r0.TLevel);
+            // ScanG is the only 16-bit little-endian read: bytes 20-21
+            Assert.Equal(raw[20] | (raw[21] << 8), r0.ScanG);
         }
     }
 }
