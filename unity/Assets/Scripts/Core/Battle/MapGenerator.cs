@@ -33,6 +33,11 @@ namespace OpenXcom.Core.Battle
                         tile.WestWall = Resolve(raw.WestWall, terrain, datasetTiles);
                         tile.NorthWall = Resolve(raw.NorthWall, terrain, datasetTiles);
                         tile.Object = Resolve(raw.Object, terrain, datasetTiles);
+
+                        tile.Walkable = tile.Floor != null && !tile.Floor.NoFloor;
+                        tile.BlocksSight = (tile.WestWall?.StopLOS ?? false)
+                            || (tile.NorthWall?.StopLOS ?? false)
+                            || (tile.Object?.StopLOS ?? false);
                     }
                 }
             }

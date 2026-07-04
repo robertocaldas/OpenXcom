@@ -83,5 +83,74 @@ namespace OpenXcom.Core.Tests
             }
             Assert.True(foundAtLeastOneResolvedPart, "Expected at least one nonzero floor index in CULTA00.");
         }
+
+        [Fact]
+        public void Build_TileWithNoFloorRecordIsNotWalkable()
+        {
+            var (terrain, datasetTiles, block) = LoadReal();
+            var grid = MapGenerator.Build(block, terrain, datasetTiles);
+
+            bool foundNoFloorTile = false;
+            bool foundNormalFloorTile = false;
+            for (int y = 0; y < grid.Length; y++)
+            {
+                for (int x = 0; x < grid.Width; x++)
+                {
+                    var tile = grid.At(x, y, 0);
+                    if (tile.Floor == null) continue;
+
+                    if (tile.Floor.NoFloor)
+                    {
+                        Assert.False(tile.Walkable);
+                        foundNoFloorTile = true;
+                    }
+                    else
+                    {
+                        Assert.True(tile.Walkable);
+                        foundNormalFloorTile = true;
+                    }
+                }
+            }
+            Assert.True(foundNormalFloorTile, "Expected at least one normal walkable floor tile in CULTA00.");
+            // CULTA00 may or may not contain a NoFloor record; this assertion
+            // only fires the NoFloor branch above if one exists, it does not
+            // require one to exist.
+        }
+
+        [Fact]
+        public void Build_TileWithoutAnyFloorIsNotWalkable()
+        {
+            var (terrain, datasetTiles, block) = LoadReal();
+            var grid = MapGenerator.Build(block, terrain, datasetTiles);
+
+            for (int y = 0; y < grid.Length; y++)
+            {
+                for (int x = 0; x < grid.Width; x++)
+                {
+                    var tile = grid.At(x, y, 0);
+                    if (tile.Floor == null)
+                        Assert.False(tile.Walkable);
+                }
+            }
+        }
+
+        [Fact]
+        public void Build_BlocksSightMatchesAnyPartsStopLOSFlag()
+        {
+            var (terrain, datasetTiles, block) = LoadReal();
+            var grid = MapGenerator.Build(block, terrain, datasetTiles);
+
+            for (int y = 0; y < grid.Length; y++)
+            {
+                for (int x = 0; x < grid.Width; x++)
+                {
+                    var tile = grid.At(x, y, 0);
+                    bool expected = (tile.WestWall?.StopLOS ?? false)
+                        || (tile.NorthWall?.StopLOS ?? false)
+                        || (tile.Object?.StopLOS ?? false);
+                    Assert.Equal(expected, tile.BlocksSight);
+                }
+            }
+        }
     }
 }
