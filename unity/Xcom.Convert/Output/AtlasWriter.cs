@@ -8,9 +8,13 @@ namespace Xcom.Convert.Output
 {
     public sealed class AtlasFrame
     {
+        [JsonProperty("x")]
         public int X { get; set; }
+        [JsonProperty("y")]
         public int Y { get; set; }
+        [JsonProperty("w")]
         public int W { get; set; }
+        [JsonProperty("h")]
         public int H { get; set; }
     }
 
@@ -54,8 +58,14 @@ namespace Xcom.Convert.Output
 
         public static void Save(AtlasResult atlas, string pngPath, string jsonPath)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(pngPath)!);
+            string? pngDir = Path.GetDirectoryName(pngPath);
+            if (!string.IsNullOrEmpty(pngDir))
+                Directory.CreateDirectory(pngDir);
             atlas.Image.SaveAsPng(pngPath);
+
+            string? jsonDir = Path.GetDirectoryName(jsonPath);
+            if (!string.IsNullOrEmpty(jsonDir))
+                Directory.CreateDirectory(jsonDir);
             var json = JsonConvert.SerializeObject(new { frames = atlas.Frames }, Formatting.Indented);
             File.WriteAllText(jsonPath, json);
         }
