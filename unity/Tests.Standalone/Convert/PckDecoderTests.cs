@@ -42,5 +42,25 @@ namespace OpenXcom.Core.Tests.Convert
                 if (px != 0) { anyOpaque = true; break; }
             Assert.True(anyOpaque, "decoded frame 0 was entirely transparent");
         }
+
+        [Fact]
+        public void Load_DecodesHandCraftedRleBytes_ExactPixelMatch()
+        {
+            // width=2, height=2 (4 pixels total). PCK frame bytes:
+            //   lead=0            -> no leading transparent rows skipped
+            //   5                 -> pixel[0] = 5 (literal)
+            //   0xFE, 1           -> pixel[1] skipped (stays 0, transparent)
+            //   7                 -> pixel[2] = 7 (literal)
+            //   3                 -> pixel[3] = 3 (literal)
+            //   0xFF              -> end of frame
+            byte[] pck = { 0x00, 0x05, 0xFE, 0x01, 0x07, 0x03, 0xFF };
+            // TAB: 1 frame via short array (tab.Length=2 < 4 triggers nframes=1).
+            byte[] tab = { 0x00, 0x00 };
+
+            var frames = PckDecoder.Load(pck, tab, width: 2, height: 2);
+
+            Assert.Single(frames);
+            Assert.Equal(new byte[] { 5, 0, 7, 3 }, frames[0].Pixels);
+        }
     }
 }
