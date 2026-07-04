@@ -1,0 +1,15 @@
+{
+    "name": "OpenXcom.Unity",
+    "rootNamespace": "OpenXcom.Unity",
+    "references": [
+        "OpenXcom.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": []
+}
