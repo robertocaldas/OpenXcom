@@ -19,6 +19,9 @@ namespace OpenXcom.Core.Battle
         /// <summary>Extra TU cost to enter this tile beyond the base move cost.</summary>
         public int ExtraMoveCost;
 
+        /// <summary>Permanent fog-of-war reveal: has any unit ever seen this tile? Never un-set once true.</summary>
+        public bool Discovered;
+
         /// <summary>The unit currently occupying this tile, if any.</summary>
         public BattleUnit Occupant;
 
