@@ -51,6 +51,13 @@ namespace OpenXcom.Unity
             if (_state == null)
                 return;
 
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                _state.EndPlayerTurn();
+                DrainAndAnimate();
+                return;
+            }
+
             if (Input.GetMouseButtonDown(1)) // right-click: fire at a targeted unit
             {
                 HandleFireClick();
@@ -150,6 +157,14 @@ namespace OpenXcom.Unity
                 {
                     deadTransform.gameObject.SetActive(false);
                     _unitTransforms.Remove(died.Unit);
+                }
+                else if (evt is TurnChangedEvent turnChanged)
+                {
+                    Debug.Log($"Turn changed: {turnChanged.Faction}");
+                }
+                else if (evt is BattleOverEvent battleOver)
+                {
+                    Debug.Log($"Battle over: {battleOver.Outcome}");
                 }
             }
         }
