@@ -27,9 +27,22 @@ namespace OpenXcom.Unity
         private BattleState _state;
         private BattleUnit _selected;
         private readonly Dictionary<BattleUnit, Transform> _unitTransforms = new();
-        private Queue<Position> _animationQueue;
-        private Transform _animatingTransform;
-        private Vector3 _animationTarget;
+
+        /// <summary>One unit's in-progress walk animation. A turn can move
+        /// several units (e.g. the AI's hostile turn), so this is a list, not
+        /// a single slot - a single-slot design silently clobbers all but the
+        /// last unit's animation whenever more than one UnitMovedEvent is
+        /// drained in the same call (confirmed the hard way: this exact bug
+        /// shipped once, caught only when EndPlayerTurn's multi-unit AI turn
+        /// started actually exercising the case).</summary>
+        private sealed class UnitAnimation
+        {
+            public Transform Transform;
+            public Queue<Position> Queue;
+            public Vector3 Target;
+        }
+
+        private readonly List<UnitAnimation> _activeAnimations = new();
 
         /// <summary>Wires this controller to an already-populated battle. Called by whichever scene bootstrap owns squad setup.</summary>
         public void Bind(BattleState state, IReadOnlyDictionary<BattleUnit, Transform> unitTransforms)
@@ -42,14 +55,17 @@ namespace OpenXcom.Unity
 
         private void Update()
         {
-            if (_animatingTransform != null)
+            if (_activeAnimations.Count > 0)
             {
-                AdvanceAnimation();
-                return; // don't accept new input mid-animation
+                AdvanceAnimations();
+                return; // don't accept new input while any unit is mid-animation
             }
 
             if (_state == null)
                 return;
+
+            if (_state.IsBattleOver)
+                return; // no further input once the battle is decided
 
             if (Input.GetKeyDown(KeyCode.Space))
             {
@@ -132,16 +148,16 @@ namespace OpenXcom.Unity
             {
                 if (evt is UnitMovedEvent moved && _unitTransforms.TryGetValue(moved.Unit, out var t))
                 {
-                    _animatingTransform = t;
-                    _animationQueue = new Queue<Position>(moved.Path);
-                    // Seed the target to the unit's current position so
-                    // AdvanceAnimation's "close enough, dequeue next waypoint"
-                    // gate is trivially satisfied on this first call, instead
-                    // of comparing against whatever _animationTarget was left
-                    // over from a previous, different unit's animation (or
-                    // Vector3.zero on the very first move ever).
-                    _animationTarget = t.localPosition;
-                    AdvanceAnimation();
+                    // Target seeded to the unit's current position so
+                    // AdvanceAnimations' "close enough, dequeue next
+                    // waypoint" gate is trivially satisfied on the first
+                    // tick, rather than comparing against Vector3.zero.
+                    _activeAnimations.Add(new UnitAnimation
+                    {
+                        Transform = t,
+                        Queue = new Queue<Position>(moved.Path),
+                        Target = t.localPosition,
+                    });
                 }
                 else if (evt is ProjectileFiredEvent fired)
                 {
@@ -169,23 +185,29 @@ namespace OpenXcom.Unity
             }
         }
 
-        private void AdvanceAnimation()
+        private void AdvanceAnimations()
         {
-            if (_animationQueue.Count == 0 && Vector3.Distance(_animatingTransform.localPosition, _animationTarget) < 0.01f)
+            // Iterate back-to-front so RemoveAt doesn't skip an element.
+            for (int i = _activeAnimations.Count - 1; i >= 0; i--)
             {
-                _animatingTransform = null;
-                return;
-            }
+                var anim = _activeAnimations[i];
 
-            if (Vector3.Distance(_animatingTransform.localPosition, _animationTarget) < 0.01f)
-            {
-                var next = _animationQueue.Dequeue();
-                var (sx, sy) = IsoProjection.MapToScreen(next.X, next.Y, next.Z);
-                _animationTarget = new Vector3(sx / TileRenderer.PixelsPerUnit, sy / TileRenderer.PixelsPerUnit, 0f);
-            }
+                if (anim.Queue.Count == 0 && Vector3.Distance(anim.Transform.localPosition, anim.Target) < 0.01f)
+                {
+                    _activeAnimations.RemoveAt(i);
+                    continue;
+                }
 
-            _animatingTransform.localPosition = Vector3.MoveTowards(
-                _animatingTransform.localPosition, _animationTarget, tilesPerSecond * Time.deltaTime);
+                if (Vector3.Distance(anim.Transform.localPosition, anim.Target) < 0.01f)
+                {
+                    var next = anim.Queue.Dequeue();
+                    var (sx, sy) = IsoProjection.MapToScreen(next.X, next.Y, next.Z);
+                    anim.Target = new Vector3(sx / TileRenderer.PixelsPerUnit, sy / TileRenderer.PixelsPerUnit, 0f);
+                }
+
+                anim.Transform.localPosition = Vector3.MoveTowards(
+                    anim.Transform.localPosition, anim.Target, tilesPerSecond * Time.deltaTime);
+            }
         }
     }
 }
