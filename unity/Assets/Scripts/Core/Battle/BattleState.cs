@@ -218,5 +218,23 @@ namespace OpenXcom.Core.Battle
                 Enqueue(new BattleOverEvent(outcome));
             }
         }
+
+        /// <summary>
+        /// Ends the player's turn: switches to Hostile, runs the full
+        /// simplified AI turn for every living hostile unit, then switches
+        /// back to Player - unless the battle already ended when switching
+        /// to Hostile, in which case the AI turn and the second switch are
+        /// both skipped.
+        /// </summary>
+        public void EndPlayerTurn()
+        {
+            EndTurn(); // Player -> Hostile
+            if (IsBattleOver)
+                return;
+
+            AiModule.RunHostileTurn(this);
+
+            EndTurn(); // Hostile -> Player
+        }
     }
 }
