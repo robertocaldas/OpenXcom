@@ -100,6 +100,13 @@ namespace OpenXcom.Unity
                 {
                     _animatingTransform = t;
                     _animationQueue = new Queue<Position>(moved.Path);
+                    // Seed the target to the unit's current position so
+                    // AdvanceAnimation's "close enough, dequeue next waypoint"
+                    // gate is trivially satisfied on this first call, instead
+                    // of comparing against whatever _animationTarget was left
+                    // over from a previous, different unit's animation (or
+                    // Vector3.zero on the very first move ever).
+                    _animationTarget = t.localPosition;
                     AdvanceAnimation();
                 }
             }
