@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using OpenXcom.Core.Battle;
 using OpenXcom.Core.Common;
+using OpenXcom.Core.Rules;
 using OpenXcom.Unity.Rendering;
 using UnityEngine;
 
@@ -47,7 +48,16 @@ namespace OpenXcom.Unity
                 return; // don't accept new input mid-animation
             }
 
-            if (_state == null || !Input.GetMouseButtonDown(0))
+            if (_state == null)
+                return;
+
+            if (Input.GetMouseButtonDown(1)) // right-click: fire at a targeted unit
+            {
+                HandleFireClick();
+                return;
+            }
+
+            if (!Input.GetMouseButtonDown(0)) // left-click: select / move
                 return;
 
             var ray = raycastCamera.ScreenPointToRay(Input.mousePosition);
@@ -69,6 +79,23 @@ namespace OpenXcom.Unity
             if (result.Outcome == MoveOutcome.Failed)
                 return;
 
+            DrainAndAnimate();
+        }
+
+        private void HandleFireClick()
+        {
+            if (_selected == null || _selected.RightHand == null)
+                return;
+
+            var ray = raycastCamera.ScreenPointToRay(Input.mousePosition);
+            if (!Physics.Raycast(ray, out var hit))
+                return;
+
+            var target = FindUnitAt(hit.transform);
+            if (target == null || target == _selected)
+                return;
+
+            _state.TryFire(_selected, _selected.RightHand, BattleActionType.AimedShot, target);
             DrainAndAnimate();
         }
 
@@ -108,6 +135,21 @@ namespace OpenXcom.Unity
                     // Vector3.zero on the very first move ever).
                     _animationTarget = t.localPosition;
                     AdvanceAnimation();
+                }
+                else if (evt is ProjectileFiredEvent fired)
+                {
+                    Debug.Log(fired.Hit
+                        ? $"{fired.Attacker.Name} hits {fired.Defender.Name}"
+                        : $"{fired.Attacker.Name} misses {fired.Defender.Name}");
+                }
+                else if (evt is UnitHitEvent hitEvent)
+                {
+                    Debug.Log($"{hitEvent.Unit.Name} takes {hitEvent.Damage} damage ({hitEvent.Side})");
+                }
+                else if (evt is UnitDiedEvent died && _unitTransforms.TryGetValue(died.Unit, out var deadTransform))
+                {
+                    deadTransform.gameObject.SetActive(false);
+                    _unitTransforms.Remove(died.Unit);
                 }
             }
         }
