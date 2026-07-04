@@ -89,26 +89,28 @@ directly onto a living target's own tile — `TryMove(unit, target.Position)`
 would always fail to find a path there. The AI must instead approach one of
 the target's 4 orthogonal neighbor tiles (using `Directions.Offsets[0,2,4,6]`
 = N/E/S/W) that is walkable and currently unoccupied, and move there
-instead. If the unit is already standing on one of those tiles (already
-adjacent) but couldn't fire from there, the "move" step must **not** count
-as progress (see the loop-safety note below) — the unit simply does nothing
-further this turn.
+instead.
 
-**Loop-safety design decision:** a hostile unit's turn (§3.3) repeatedly
-retries its decision until it "does nothing." Whether a fire attempt counts
-as progress is unambiguous (a fired shot always spends TU > 0). Whether a
-*move* attempt counts as progress is **not** simply "did `TryMove` not
-report `Failed`" — `TryMove`'s documented "already at target" short-circuit
-(Phase 3) returns `Outcome.Full` with an **empty path and zero TU spent**
-when the unit is already standing on the requested destination. If the loop
-treated that as progress, a unit already adjacent to a target it can't fire
-at (e.g., blocked by a wall specifically at that angle) would loop forever
-— `TryMove` to its own position "succeeds" every time without ever changing
-anything. The fix: progress is `moveResult.Path.Count > 0` (something was
-actually walked), not `moveResult.Outcome != Failed`. This was caught and
-fixed during this session's design step, before any code was written — it's
-called out explicitly here so an implementer doesn't "simplify it back" to
-the more obvious-looking `!= Failed` check.
+**Loop-termination is guaranteed without any special-casing, verify this
+rather than assume it:** a hostile unit's turn (§3.3) repeatedly retries its
+decision until it "does nothing." A fire attempt's progress is unambiguous
+(a fired shot always spends TU > 0). For the move fallback, note that
+`FindApproachTile`'s candidate filter excludes **any** occupied tile,
+including the acting unit's *own* current tile (it is always its own
+occupant while it stands there) — so `approachTile` can never equal
+`unit.Position`, which means `TryMove(unit, approachTile)` can never hit
+`TryMove`'s "already at target" short-circuit (the zero-cost, empty-path
+`Full` result Phase 3 added for a genuine no-op move). Given that, checking
+`moveResult.Path.Count > 0` and checking `moveResult.Outcome != Failed` are
+equivalent at this call site — `TryMove` only ever returns `Failed` with an
+empty path, or `Full`/`Partial` with a non-empty one, once the "already at
+target" case is structurally excluded. Either check is correct; this
+addendum initially (during this session's design step) suspected a
+loop-safety bug requiring the `Path.Count` form specifically, but that
+suspicion doesn't hold up once `FindApproachTile`'s exclusion of the
+caller's own tile is accounted for — recorded here so nobody re-derives a
+false "critical fix" from a plausible-sounding but incorrect first pass at
+this reasoning, the same way an early pass of this design did.
 
 ### 3.3 One hostile unit's turn — simplified from `BattlescapeGame::handleAI`, `src/Battlescape/BattlescapeGame.cpp:303-422`
 
@@ -119,7 +121,8 @@ ends the turn once no unit has anything left to do. **[SIMPLIFIED]**: no
 per-unit action-count cap (the real engine caps at 2 AI actions per
 `think()` call, `AIActionCounter`, `BattlescapeGame.cpp:311`) — this slice
 just repeats "try to act" for one unit until it reports no progress (see
-§3.2's loop-safety fix), then moves to the next hostile unit in whatever
+§3.2's loop-termination note — guaranteed since every progress-reporting
+action spends TU > 0), then moves to the next hostile unit in whatever
 order `BattleState.Units` already holds them (no priority/sorting).
 
 ### 3.4 Win/lose check timing — confirmed from `BattlescapeGame::endTurn`, `src/Battlescape/BattlescapeGame.cpp:652`
@@ -174,14 +177,17 @@ extension cannot be visually verified this session.
   fires (assert via `state.DequeueEvents()` containing a
   `ProjectileFiredEvent`, not just a `true` return value) and returns
   `true`; a unit with no visible enemy returns `false` and enqueues
-  nothing; a unit that can't fire (insufficient TU for the shot) but *can*
-  move approaches an orthogonal-adjacent tile of the target (assert the
-  unit's new `Position` is genuinely one of the 4 orthogonal offsets from
-  the target, not just "some tile changed"); a unit already standing on
-  such an adjacent tile that still can't fire returns `false` (the
-  loop-safety case from §3.2 — this is the specific regression the
-  `Path.Count > 0` fix guards against, so test it directly with a
-  hand-built scenario, not just trust the code).
+  nothing; a unit that can't fire (insufficient TU for the shot, or no
+  weapon at all) but *can* move approaches an orthogonal-adjacent tile of
+  the target (assert the unit's new `Position` is genuinely one of the 4
+  orthogonal offsets from the target, not just "some tile changed"); a unit
+  with no weapon whose only reachable approach tile is blocked (e.g. the
+  target itself sits in a single-row corridor with the acting unit on the
+  far side, so the near-side approach tile is unreachable without stepping
+  through the target's own occupied tile) returns `false` with no position/TU
+  change and no events — test this directly with a hand-built scenario,
+  don't just trust that `FindApproachTile`/`TryMove`'s interaction degrades
+  gracefully.
 - `AiModule.RunHostileTurn`: processes every living hostile unit (a dead
   one is skipped); a unit with enough TU for multiple actions this turn
   (e.g. two shots) actually takes more than one action (assert more than
@@ -207,16 +213,22 @@ extension cannot be visually verified this session.
 - Scope check: matches parent spec §7 step 5 exactly ("enemy AI + turn/
   win-loss — full skirmish loop, slice complete") without absorbing
   unrelated future-phase concerns (civilians, objectives, UI polish).
-- Ambiguity check: the two genuine design decisions in this addendum (not
-  pure C++ ports) — the orthogonal-approach-tile fix and the
-  `Path.Count > 0` loop-safety condition — are both flagged explicitly with
-  the reasoning, specifically so an implementer or reviewer doesn't
-  "simplify" either one back into the more obvious-looking but actually
-  broken version (targeting the enemy's own tile directly; using
-  `Outcome != Failed` for move-progress).
+- Ambiguity check: the one genuine design decision in this addendum (not a
+  pure C++ port) — approaching one of the target's orthogonal neighbor
+  tiles instead of the target's own (always-occupied, always-blocked) tile
+  — is flagged explicitly with the reasoning, so an implementer doesn't
+  "simplify" it back to `TryMove(unit, target.Position)`, which would never
+  find a path. §3.2 also records a self-correction made during this same
+  design step: an initial pass suspected a loop-termination bug requiring
+  `Path.Count > 0` specifically instead of `Outcome != Failed`, but working
+  through `FindApproachTile`'s occupancy filter (which excludes the acting
+  unit's own tile, since it is always that tile's occupant) shows the two
+  checks are equivalent at this call site — recorded so the corrected
+  reasoning is available rather than just the corrected conclusion.
 - Given this project's session-long pattern of caught test-quality issues,
   the testing strategy above explicitly calls for asserting exact event
   types/counts (not just booleans) and for directly testing the
-  already-adjacent-but-can't-fire loop-safety case with a hand-built
-  scenario, since that's exactly the kind of edge case a naive test suite
-  would skip.
+  unreachable-approach-tile case with a hand-built scenario (a corridor
+  where the only tile `FindApproachTile` picks first requires stepping
+  through the target's own occupied tile to reach), since that's exactly
+  the kind of edge case a naive test suite would skip.
