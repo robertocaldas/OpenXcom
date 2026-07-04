@@ -51,6 +51,7 @@ namespace Xcom.Convert
             written.Add("units-XCOM_0.png");
             written.Add("units-XCOM_0.frames.json");
 
+            written.Add("manifest.json");
             File.WriteAllText(Path.Combine(outDir, "manifest.json"),
                 JsonConvert.SerializeObject(new { files = written }, Formatting.Indented));
 

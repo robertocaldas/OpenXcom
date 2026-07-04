@@ -22,6 +22,14 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Contains(written, p => p.Contains("units") && p.EndsWith(".png"));
             Assert.True(File.Exists(Path.Combine(outDir, "manifest.json")));
 
+            Assert.Equal(7, written.Count);
+            Assert.Contains("manifest.json", written);
+            var manifestJson = File.ReadAllText(Path.Combine(outDir, "manifest.json"));
+            var manifest = Newtonsoft.Json.Linq.JObject.Parse(manifestJson);
+            var files = manifest["files"].Select(t => t.ToString()).ToList();
+            Assert.Equal(7, files.Count);
+            Assert.Contains("manifest.json", files);
+
             Directory.Delete(outDir, recursive: true);
         }
     }
