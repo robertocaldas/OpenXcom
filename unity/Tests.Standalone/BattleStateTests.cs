@@ -54,6 +54,31 @@ namespace OpenXcom.Core.Tests
         }
 
         [Fact]
+        public void SpawnAtRouteNodes_SquadSmallerThanNodeCount_OnlySpawnsSquadCountUnitsAtTheirOwnNodes()
+        {
+            var grid = new TileGrid(10, 10, 1);
+            var routeNodes = new List<DataLoader.RawRouteNode>
+            {
+                new() { X = 1, Y = 1, Z = 0 },
+                new() { X = 5, Y = 5, Z = 0 },
+                new() { X = 9, Y = 9, Z = 0 }, // never used - squad only has 2 units
+            };
+            var squad = new List<BattleUnit>
+            {
+                new(RuleUnit.Soldier, Faction.Player),
+                new(RuleUnit.Soldier, Faction.Player),
+            };
+
+            var state = BattleState.SpawnAtRouteNodes(grid, routeNodes, squad);
+
+            Assert.Equal(2, state.Units.Count);
+            Assert.Equal(new Position(1, 1, 0), state.Units[0].Position);
+            Assert.Equal(new Position(5, 5, 0), state.Units[1].Position);
+            // The third node (9,9,0) must NOT have received a unit.
+            Assert.Null(grid.At(9, 9, 0).Occupant);
+        }
+
+        [Fact]
         public void EnqueueAndDequeueEvents_ReturnsInOrderAndClearsQueue()
         {
             var grid = new TileGrid(1, 1, 1);
