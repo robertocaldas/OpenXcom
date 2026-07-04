@@ -83,3 +83,21 @@ bin/Win32/user*
 bin/user
 /.kdev4/
 /*.kdev4
+
+# --- Unity C# rewrite (unity/) ---
+# Proprietary original X-COM data — never commit
+unity/RawData/
+# Converted assets (derivatives of copyrighted art) — regenerate locally
+unity/Assets/GameData/
+# Unity Editor generated
+unity/[Ll]ibrary/
+unity/[Tt]emp/
+unity/[Oo]bj/
+unity/[Bb]uild/
+unity/[Bb]uilds/
+unity/[Ll]ogs/
+unity/[Uu]serSettings/
+unity/.vs/
+# .NET build output
+unity/**/bin/
+unity/**/obj/
