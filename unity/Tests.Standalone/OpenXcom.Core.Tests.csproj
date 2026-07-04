@@ -12,6 +12,8 @@
   <ItemGroup>
     <!-- Single source of truth: the pure-C# game core Unity also compiles. -->
     <Compile Include="../Assets/Scripts/Core/**/*.cs" />
+    <!-- Pure-math iso projection helper: no UnityEngine dependency, testable here. -->
+    <Compile Include="../Assets/Scripts/Unity/Rendering/IsoProjection.cs" />
   </ItemGroup>
 
   <ItemGroup>
