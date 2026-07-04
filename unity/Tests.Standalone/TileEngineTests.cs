@@ -95,5 +95,29 @@ namespace OpenXcom.Core.Tests
             Assert.DoesNotContain(new Position(19, 0, 0), visibleFromFarAway);
             Assert.True(grid.At(19, 0, 0).Discovered);
         }
+
+        [Fact]
+        public void ComputeVisibleTiles_DiagonalPointBeyondEuclideanRange_IsExcluded_CatchesAChebyshevDistanceRegression()
+        {
+            // (20,20,0): Euclidean distance = sqrt(800) ~= 28.28 (> 20, out of range).
+            // Chebyshev distance (max(|dx|,|dy|)) would be exactly 20 (in range) -
+            // this point specifically distinguishes the two metrics.
+            var grid = new TileGrid(25, 25, 1);
+            var visible = TileEngine.ComputeVisibleTiles(grid, new Position(0, 0, 0));
+
+            Assert.DoesNotContain(new Position(20, 20, 0), visible);
+        }
+
+        [Fact]
+        public void ComputeVisibleTiles_DiagonalPointWithinEuclideanRange_IsIncluded_CatchesAManhattanDistanceRegression()
+        {
+            // (14,14,0): Euclidean distance = sqrt(392) ~= 19.80 (<= 20, in range).
+            // Manhattan distance (|dx|+|dy|) would be 28 (out of range) -
+            // this point specifically distinguishes the two metrics.
+            var grid = new TileGrid(20, 20, 1);
+            var visible = TileEngine.ComputeVisibleTiles(grid, new Position(0, 0, 0));
+
+            Assert.Contains(new Position(14, 14, 0), visible);
+        }
     }
 }
