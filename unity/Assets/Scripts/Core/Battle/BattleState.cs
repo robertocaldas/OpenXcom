@@ -17,6 +17,19 @@ namespace OpenXcom.Core.Battle
         public IReadOnlyList<Position> Path;
     }
 
+    public enum FireOutcome
+    {
+        NoLineOfSight,
+        InsufficientTu,
+        Fired,
+    }
+
+    public sealed class FireResult
+    {
+        public FireOutcome Outcome;
+        public ShotResult Shot;
+    }
+
     /// <summary>
     /// The battle's mutable runtime container: the TileGrid, all units, whose
     /// turn it is, and the outbound BattleEvent queue. Mirrors OXCE's
@@ -115,5 +128,58 @@ namespace OpenXcom.Core.Battle
             var outcome = walked.Count == fullPath.Count ? MoveOutcome.Full : MoveOutcome.Partial;
             return new MoveResult { Outcome = outcome, Path = walked };
         }
+
+        /// <summary>
+        /// Attempts to fire `weapon` from `attacker` at `defender`. Gated by
+        /// line of sight (TileEngine.ComputeVisibleTiles) and TU budget, in
+        /// that order - LOS is checked first since it costs nothing to check
+        /// and shouldn't consume TU on a doomed attempt. TU is spent
+        /// immediately once both gates pass; a kill clears the defender's
+        /// tile occupancy synchronously (no death-animation state machine
+        /// this phase). Always enqueues one ProjectileFiredEvent when a shot
+        /// is actually fired (hit or miss), plus UnitHitEvent/UnitDiedEvent
+        /// as applicable.
+        /// </summary>
+        public FireResult TryFire(BattleUnit attacker, BattleItem weapon, BattleActionType action, BattleUnit defender)
+        {
+            var visibleTiles = TileEngine.ComputeVisibleTiles(Grid, attacker.Position);
+            if (!visibleTiles.Contains(defender.Position))
+                return new FireResult { Outcome = FireOutcome.NoLineOfSight, Shot = ShotResult.Miss };
+
+            int tuCost = attacker.FireTuCost(action, weapon);
+            if (!attacker.CanSpend(tuCost))
+                return new FireResult { Outcome = FireOutcome.InsufficientTu, Shot = ShotResult.Miss };
+
+            attacker.Spend(tuCost);
+            var shot = Combat.ResolveShot(Rng, attacker, weapon, action, defender);
+            Enqueue(new ProjectileFiredEvent(attacker, defender, shot.Hit));
+
+            if (shot.Hit)
+            {
+                var side = Combat.HitSide(attacker.Position, defender.Position);
+                Enqueue(new UnitHitEvent(defender, shot.AppliedDamage, side));
+
+                if (shot.Killed)
+                {
+                    Grid[defender.Position].Occupant = null;
+                    Enqueue(new UnitDiedEvent(defender));
+                }
+            }
+
+            return new FireResult { Outcome = FireOutcome.Fired, Shot = shot };
+        }
+
+        /// <summary>
+        /// True when either faction has no living units left. Simplified
+        /// port of BattlescapeGame::tallyUnits's core rule
+        /// (src/Battlescape/BattlescapeGame.cpp:3361, "liveAliens == 0 ||
+        /// liveSoldiers == 0"), ignoring the VIP-escort/must-destroy
+        /// objective exceptions (not applicable to a plain skirmish). Checks
+        /// each unit's IsAlive - dead units stay in the Units list, so list
+        /// membership/count alone would be wrong here.
+        /// </summary>
+        public bool IsBattleOver =>
+            !Units.Exists(u => u.Faction == Faction.Player && u.IsAlive) ||
+            !Units.Exists(u => u.Faction == Faction.Hostile && u.IsAlive);
     }
 }

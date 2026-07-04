@@ -34,4 +34,42 @@ namespace OpenXcom.Core.Battle
             Faction = faction;
         }
     }
+
+    public sealed class ProjectileFiredEvent : BattleEvent
+    {
+        public BattleUnit Attacker { get; }
+        public BattleUnit Defender { get; }
+        public bool Hit { get; }
+
+        public ProjectileFiredEvent(BattleUnit attacker, BattleUnit defender, bool hit)
+        {
+            Attacker = attacker;
+            Defender = defender;
+            Hit = hit;
+        }
+    }
+
+    public sealed class UnitHitEvent : BattleEvent
+    {
+        public BattleUnit Unit { get; }
+        public int Damage { get; }
+        public UnitSide Side { get; }
+
+        public UnitHitEvent(BattleUnit unit, int damage, UnitSide side)
+        {
+            Unit = unit;
+            Damage = damage;
+            Side = side;
+        }
+    }
+
+    public sealed class UnitDiedEvent : BattleEvent
+    {
+        public BattleUnit Unit { get; }
+
+        public UnitDiedEvent(BattleUnit unit)
+        {
+            Unit = unit;
+        }
+    }
 }
