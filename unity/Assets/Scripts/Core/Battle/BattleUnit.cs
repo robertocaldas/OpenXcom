@@ -116,11 +116,18 @@ namespace OpenXcom.Core.Battle
             return Math.Max(healthPercent - 10 * FatalWounds, 0);
         }
 
-        /// <summary>TU cost for an attack action with the given weapon (percent of max TUs).</summary>
+        /// <summary>
+        /// TU cost for an attack action with the given weapon (percent of
+        /// max TUs). Floored at 1: a low-TimeUnits unit combined with a low
+        /// TU-percent weapon could otherwise truncate to 0 (integer
+        /// division), which would let CanSpend(0) always succeed - Phase 5's
+        /// AiModule.RunHostileTurn relies on every successful fire spending
+        /// TU > 0 to guarantee its per-unit action loop terminates.
+        /// </summary>
         public int FireTuCost(BattleActionType action, BattleItem weapon)
         {
             int percent = weapon.Rules.TuPercentFor(action);
-            return Stats.TimeUnits * percent / 100;
+            return Math.Max(1, Stats.TimeUnits * percent / 100);
         }
 
         public bool CanSpend(int tu) => TimeUnits >= tu;
