@@ -78,5 +78,22 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Single(frames);
             Assert.Equal(new byte[] { 0, 0, 5, 0 }, frames[0].Pixels);
         }
+
+        [Fact]
+        public void Load_DecodesHandCraftedRleBytes_MultiCountTransparentRun_ExactPixelMatch()
+        {
+            // width=4, height=1 (4 pixels total). PCK frame bytes:
+            //   lead=0            -> no leading transparent rows skipped
+            //   0xFE, 3           -> 3 transparent pixels (pixel[0..2] stay 0)
+            //   9                 -> pixel[3] = 9 (literal; dst was advanced to 3 by the run)
+            //   0xFF              -> end of frame
+            byte[] pck = { 0x00, 0xFE, 0x03, 0x09, 0xFF };
+            byte[] tab = { 0x00, 0x00 }; // tab.Length < 4 -> nframes = 1
+
+            var frames = PckDecoder.Load(pck, tab, width: 4, height: 1);
+
+            Assert.Single(frames);
+            Assert.Equal(new byte[] { 0, 0, 0, 9 }, frames[0].Pixels);
+        }
     }
 }
