@@ -10,6 +10,18 @@ namespace OpenXcom.Unity.Rendering
     /// </summary>
     public sealed class TileRenderer : MonoBehaviour
     {
+        /// <summary>
+        /// Must match the pixelsPerUnit passed to Sprite.Create for these
+        /// sprites (BattlescapeMapView.SpriteFor). IsoProjection.MapToScreen
+        /// returns raw pixel offsets (e.g. 16, 8, 24...) sized for the
+        /// original SDL-style 1-pixel-per-unit renderer; Unity's
+        /// Transform.localPosition is in world units, where a sprite's
+        /// on-screen size is (texture pixels / pixelsPerUnit). Without this
+        /// conversion, tiles would be positioned ~32x farther apart than
+        /// their sprites are wide/tall.
+        /// </summary>
+        public const float PixelsPerUnit = 32f;
+
         private SpriteRenderer _floor;
         private SpriteRenderer _westWall;
         private SpriteRenderer _northWall;
@@ -41,10 +53,10 @@ namespace OpenXcom.Unity.Rendering
             Sprite westWallSprite, Sprite northWallSprite, Sprite objectSprite)
         {
             var (screenX, screenY) = IsoProjection.MapToScreen(x, y, z);
-            transform.localPosition = new Vector3(screenX, screenY, 0f);
+            transform.localPosition = new Vector3(screenX / PixelsPerUnit, screenY / PixelsPerUnit, 0f);
 
             _floor.sprite = floorSprite;
-            _floor.transform.localPosition = new Vector3(0f, -floorYOffsetPixels, 0f);
+            _floor.transform.localPosition = new Vector3(0f, -floorYOffsetPixels / PixelsPerUnit, 0f);
             _floor.sortingOrder = IsoProjection.SortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.Floor);
 
             _westWall.sprite = westWallSprite;

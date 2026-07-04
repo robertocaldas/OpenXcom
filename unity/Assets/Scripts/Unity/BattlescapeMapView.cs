@@ -99,7 +99,7 @@ namespace OpenXcom.Unity
                 return null;
 
             var rect = frameRects[frameIndex];
-            return Sprite.Create(texture, rect, new Vector2(0.5f, 0f), pixelsPerUnit: 32f);
+            return Sprite.Create(texture, rect, new Vector2(0.5f, 0f), pixelsPerUnit: Rendering.TileRenderer.PixelsPerUnit);
         }
 
         [System.Serializable]
