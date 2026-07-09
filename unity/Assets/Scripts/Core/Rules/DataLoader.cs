@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
-using System.Text.Json;
+using Newtonsoft.Json;
 
 namespace OpenXcom.Core.Rules
 {
@@ -8,19 +8,15 @@ namespace OpenXcom.Core.Rules
     /// Reads Xcom.Convert's emitted JSON from a GameData directory into
     /// Core's rule/data model. Core never parses YAML or references
     /// Xcom.Convert's types directly — only this converted JSON shape.
+    /// Uses Newtonsoft.Json to match the serializer Xcom.Convert writes with.
     /// </summary>
     public static class DataLoader
     {
-        private static readonly JsonSerializerOptions Options = new()
-        {
-            PropertyNameCaseInsensitive = true,
-        };
-
         public static List<MapDataTile> LoadTiles(string gameDataDir, string datasetName)
         {
             string path = Path.Combine(gameDataDir, $"tiles-{datasetName}.json");
             string json = File.ReadAllText(path);
-            var raw = JsonSerializer.Deserialize<List<RawMcdRecord>>(json, Options);
+            var raw = JsonConvert.DeserializeObject<List<RawMcdRecord>>(json);
 
             var result = new List<MapDataTile>(raw.Count);
             for (int i = 0; i < raw.Count; i++)
@@ -58,7 +54,7 @@ namespace OpenXcom.Core.Rules
         {
             string path = Path.Combine(gameDataDir, $"terrain-{terrainName}.datasets.json");
             string json = File.ReadAllText(path);
-            var raw = JsonSerializer.Deserialize<RawTerrainDatasets>(json, Options);
+            var raw = JsonConvert.DeserializeObject<RawTerrainDatasets>(json);
 
             var dataSets = new List<MapDataSetInfo>(raw.Datasets.Count);
             foreach (var d in raw.Datasets)
@@ -71,7 +67,7 @@ namespace OpenXcom.Core.Rules
         {
             string path = Path.Combine(gameDataDir, $"mapblock-{blockName}.json");
             string json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<RawMapBlockData>(json, Options);
+            return JsonConvert.DeserializeObject<RawMapBlockData>(json);
         }
 
         // --- JSON-shaped DTOs matching Xcom.Convert's emitted field names ---

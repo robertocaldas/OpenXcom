@@ -98,6 +98,7 @@ unity/[Bb]uilds/
 unity/[Ll]ogs/
 unity/[Uu]serSettings/
 unity/.vs/
+unity/**/.idea/
 # .NET build output
 unity/**/bin/
 unity/**/obj/
