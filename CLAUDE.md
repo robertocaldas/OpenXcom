@@ -120,6 +120,9 @@ Mod content on disk lives under `bin/`:
 At runtime, users' own mods live in the user data directory's `mods/`
 subfolder (see README.md for per-OS paths) and are merged the same way.
 
+There is a large documentation about the ruleset at https://www.ufopaedia.org/index.php/Ruleset_Reference_Nightly_(OpenXcom)
+Use it.
+
 ### Scripting engine
 
 `src/Engine/Script.h`/`.cpp` implements OXCE's custom mini scripting
