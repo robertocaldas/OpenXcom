@@ -71,7 +71,13 @@ namespace OpenXcom.Unity.Rendering
         /// this still overflows the 16-bit range for a single-z-layer grid
         /// bigger than roughly 73x73 tiles - fine for CULTA00 (10x10), would
         /// need revisiting (e.g. a real Unity sorting layer instead of a
-        /// numeric offset) for a much larger map.
+        /// numeric offset) for a much larger map; (3) the band is sized from
+        /// mapWidth*mapLength only, not mapHeight - SortingOrder's tileIndex
+        /// includes z as its outermost factor, so ANY z>=1 tile already
+        /// reaches tileIndex=mapWidth*mapLength, colliding with (or
+        /// exceeding) this band regardless of how small the grid footprint
+        /// is. Harmless for CULTA00 (Height=1) but this guarantee does not
+        /// hold at all for a multi-story map - revisit before loading one.
         /// </summary>
         public static int UnitSortingOrder(int x, int y, int z, int mapWidth, int mapLength)
         {
