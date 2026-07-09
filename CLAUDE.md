@@ -157,9 +157,15 @@ a reference spec for its ports (formulas, file formats).
   UnityEngine references (`noEngineReferences: true` asmdef), so gameplay
   logic is testable without the Editor.
 - `unity/Assets/Scripts/Unity` (`OpenXcom.Unity` namespace) — MonoBehaviours
-  (rendering/input). One-way dependency on Core. **No Unity Editor exists in
-  this dev environment** — files here have never been compiled or run;
-  verify in-Editor before trusting them.
+  (rendering/input). One-way dependency on Core. **No Unity Editor is open by
+  default in this dev environment** — treat files here as uncompiled/unrun
+  until proven otherwise. Check `mcp__coplay-mcp__list_unity_project_roots`
+  first: if it returns this project, a live Editor is connected via the
+  Coplay MCP plugin and can be driven directly (create scenes/GameObjects,
+  press Play, read compile errors and logs) instead of hand-authoring `.unity`
+  files blind. If it returns empty, no Editor is open — ask the user to
+  launch Unity on `unity/` with Coplay connected before relying on in-Editor
+  verification, or fall back to a documented blind hand-off.
 - `unity/Tests.Standalone` — xUnit project (`dotnet test`), compiles Core +
   Convert directly. Primary verification loop. Needs
   `export PATH="$HOME/.dotnet:$PATH"` in non-interactive shells (.NET SDK is
@@ -173,6 +179,14 @@ calling `BattleController.Bind`/`BattleState.SpawnAtRouteNodes`), so it has
 never been run. Design/plan docs for each phase live under
 `docs/superpowers/specs/` and `docs/superpowers/plans/`
 (`2026-07-04-battlescape-skirmish-design.md` is the parent spec).
+
+**When writing a slice's design spec, always include an explicit "what this
+slice does NOT include" section** (deferred features, simplified formulas,
+hardcoded stand-ins left in place, data/entries not converted), not just what
+it adds. This project is built as a long sequence of incremental slices
+across many sessions with no persistent Editor state to inspect — the spec
+is often the only record of what's real versus stubbed, so a future session
+must be able to read one spec and know exactly what's left to build.
 
 ## Notes for making changes
 
