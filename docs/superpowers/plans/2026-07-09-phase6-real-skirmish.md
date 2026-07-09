@@ -1323,3 +1323,103 @@ git commit -m "feat(unity): BattlescapeBootstrap + Battlescape scene - first liv
 (Include the `.meta` file Unity generates for the new scene — `.meta` files
 are how Unity tracks asset GUIDs and must be committed alongside their
 asset.)
+
+---
+
+### Task 7 (added post-review, not in the original plan): fix unit sprite occlusion
+
+Task 6's live-play verification (the first time this system ever rendered
+units in a real scene) found a real bug: Soldier A/B are invisible on
+screen — a neighboring tile's Floor sprite paints over them. Root cause,
+confirmed via independently-reconstructed sorting-order arithmetic during
+Task 6's review: `IsoProjection.SortingOrder`'s tile-index-based ordering
+(`tileIndex*5 + part`) has no way to guarantee a unit renders above a
+*neighboring* tile's sprite — CULTA00's one shared floor sprite (all 100
+tiles use the same MCD record) is tall enough in its raw 32×40 frame to
+fully cover a unit standing one row toward the camera. This isn't
+position-specific: it's a property of the shared floor sprite's height
+versus the fixed 8px-per-row iso screen spacing, so it can occlude a unit
+standing on *any* tile — the two Sectoids only escape it because their
+sprite's visible pixel content happens to sit in a screen-space region the
+neighbor's opaque pixels don't reach.
+
+**Fix:** give units their own sorting band, offset above the highest
+`SortingOrder` any tile in a grid of that size can reach, rather than
+sharing numeric space with tile parts via `PartRank.Unit`. Pure C# (testable
+via `dotnet test`, no Editor needed for the logic itself — Editor is only
+needed to re-verify the actual rendering).
+
+**Files:**
+- Modify: `unity/Assets/Scripts/Unity/Rendering/IsoProjection.cs` (add `UnitSortingOrder`)
+- Modify: `unity/Assets/Scripts/Unity/Rendering/UnitRenderer.cs` (call it instead of `SortingOrder(..., PartRank.Unit)`)
+- Modify: `unity/Tests.Standalone/Unity/IsoProjectionTests.cs` (add coverage)
+
+Add to `IsoProjection.cs`, after `SortingOrder`:
+
+```csharp
+        /// <summary>
+        /// A unit's sorting order: always above every tile part in a grid of
+        /// this size, never sharing numeric space with tile parts. Unlike
+        /// tile parts, a unit must never be occluded by ANY tile - including
+        /// a neighboring tile whose sprite's full (non-diamond-trimmed)
+        /// rectangular bounds extend into this tile's screen footprint
+        /// (observed with CULTA00: its one shared floor sprite is tall
+        /// enough to fully cover a unit standing one row toward the camera).
+        /// SortingOrder's tile-index scheme can't express "in front of every
+        /// tile," so units get their own band offset well above the highest
+        /// SortingOrder any tile in a mapWidth x mapLength grid could reach
+        /// (tiles top out at tileIndex*5+3), with the same (z,y,x) ordering
+        /// as a tiebreak among units. [KNOWN LIMITATION] this means a unit
+        /// always draws in front of tall walls/objects too, not just floors
+        /// - fine for CULTA00 (zero walls/objects), wrong for a future
+        /// terrain where a unit should be hidden behind a tall object.
+        /// </summary>
+        public static int UnitSortingOrder(int x, int y, int z, int mapWidth, int mapLength)
+        {
+            long tileIndex = ((long)z * mapLength + y) * mapWidth + x;
+            long unitBand = (long)mapWidth * mapLength * 1000;
+            return (int)(unitBand + tileIndex);
+        }
+```
+
+In `UnitRenderer.cs`, change:
+
+```csharp
+            _renderer.sortingOrder = IsoProjection.SortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.Unit);
+```
+
+to:
+
+```csharp
+            _renderer.sortingOrder = IsoProjection.UnitSortingOrder(x, y, z, mapWidth, mapLength);
+```
+
+Add to `IsoProjectionTests.cs`:
+
+```csharp
+        [Fact]
+        public void UnitSortingOrder_AlwaysExceedsAnyTilesSortingOrderInThatGrid()
+        {
+            int maxPossibleTileOrder = IsoProjection.SortingOrder(9, 9, 0, 10, 10, IsoProjection.PartRank.Object);
+            int unitOrderAtOrigin = IsoProjection.UnitSortingOrder(0, 0, 0, 10, 10);
+            Assert.True(unitOrderAtOrigin > maxPossibleTileOrder);
+        }
+
+        [Fact]
+        public void UnitSortingOrder_UsesZYXAsATiebreakAmongUnits()
+        {
+            int a = IsoProjection.UnitSortingOrder(1, 1, 0, 10, 10);
+            int b = IsoProjection.UnitSortingOrder(2, 1, 0, 10, 10);
+            Assert.True(b > a);
+        }
+```
+
+**Verification:**
+1. `dotnet test` — both new tests pass, full suite still passes.
+2. Live in the Editor: `check_compile_errors`, then re-run the same
+   pixel-level verification Task 6 used (render the actual Main Camera to an
+   off-screen `RenderTexture`, confirm non-grass pixels now appear in
+   Soldier A/B's expected screen bounding boxes), then re-run the Task 6
+   scripted `execute_script` smoke test to confirm the gameplay loop is
+   unaffected by this rendering-only change.
+3. Commit.
