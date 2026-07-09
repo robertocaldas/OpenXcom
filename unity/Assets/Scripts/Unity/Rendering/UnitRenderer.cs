@@ -27,7 +27,7 @@ namespace OpenXcom.Unity.Rendering
             transform.localPosition = new Vector3(screenX / TileRenderer.PixelsPerUnit, screenY / TileRenderer.PixelsPerUnit, 0f);
 
             _renderer.sprite = sprite;
-            _renderer.sortingOrder = IsoProjection.SortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.Unit);
+            _renderer.sortingOrder = IsoProjection.UnitSortingOrder(x, y, z, mapWidth, mapLength);
         }
     }
 }

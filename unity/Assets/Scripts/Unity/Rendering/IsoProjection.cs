@@ -43,5 +43,41 @@ namespace OpenXcom.Unity.Rendering
             long tileIndex = ((long)z * mapLength + y) * mapWidth + x;
             return (int)(tileIndex * 5 + (int)part);
         }
+
+        /// <summary>
+        /// A unit's sorting order: always above every tile part in a grid of
+        /// this size, never sharing numeric space with tile parts. Unlike
+        /// tile parts, a unit must never be occluded by ANY tile - including
+        /// a neighboring tile whose sprite's full (non-diamond-trimmed)
+        /// rectangular bounds extend into this tile's screen footprint
+        /// (observed with CULTA00: its one shared floor sprite is tall
+        /// enough to fully cover a unit standing one row toward the camera).
+        /// SortingOrder's tile-index scheme can't express "in front of every
+        /// tile," so units get their own band offset above the highest
+        /// SortingOrder any tile in a mapWidth x mapLength grid could reach
+        /// (tiles top out at tileIndex*5+3), with the same (z,y,x) ordering
+        /// as a tiebreak among units. The offset uses the same x5 scale as
+        /// SortingOrder itself (not a large round number like x1000): Unity's
+        /// Renderer.sortingOrder is stored internally as a 16-bit value even
+        /// though its public type is int, so values outside
+        /// short.MinValue..short.MaxValue silently wrap - confirmed live in
+        /// the Editor, where an earlier x1000-offset version gave CULTA00's
+        /// 10x10 grid a unit order of 100011, which Unity wrapped to -31061,
+        /// putting units BEHIND every tile instead of in front of them (still
+        /// invisible, just for a different reason). [KNOWN LIMITATIONS] (1)
+        /// a unit always draws in front of tall walls/objects too, not just
+        /// floors - fine for CULTA00 (zero walls/objects), wrong for a future
+        /// terrain where a unit should be hidden behind a tall object; (2)
+        /// this still overflows the 16-bit range for a single-z-layer grid
+        /// bigger than roughly 73x73 tiles - fine for CULTA00 (10x10), would
+        /// need revisiting (e.g. a real Unity sorting layer instead of a
+        /// numeric offset) for a much larger map.
+        /// </summary>
+        public static int UnitSortingOrder(int x, int y, int z, int mapWidth, int mapLength)
+        {
+            long tileIndex = ((long)z * mapLength + y) * mapWidth + x;
+            long unitBand = (long)mapWidth * mapLength * 5;
+            return (int)(unitBand + tileIndex);
+        }
     }
 }

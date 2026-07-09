@@ -63,5 +63,35 @@ namespace OpenXcom.Core.Tests.Unity
             Assert.True(unit > obj);
             Assert.True(unit < nextTileFloor);
         }
+
+        [Fact]
+        public void UnitSortingOrder_AlwaysExceedsAnyTilesSortingOrderInThatGrid()
+        {
+            int maxPossibleTileOrder = IsoProjection.SortingOrder(9, 9, 0, 10, 10, IsoProjection.PartRank.Object);
+            int unitOrderAtOrigin = IsoProjection.UnitSortingOrder(0, 0, 0, 10, 10);
+            Assert.True(unitOrderAtOrigin > maxPossibleTileOrder);
+        }
+
+        [Fact]
+        public void UnitSortingOrder_UsesZYXAsATiebreakAmongUnits()
+        {
+            int a = IsoProjection.UnitSortingOrder(1, 1, 0, 10, 10);
+            int b = IsoProjection.UnitSortingOrder(2, 1, 0, 10, 10);
+            Assert.True(b > a);
+        }
+
+        [Fact]
+        public void UnitSortingOrder_FitsWithinUnitySortingOrderInt16RangeForCulta00SizedGrids()
+        {
+            // Renderer.sortingOrder is stored internally as a 16-bit value even
+            // though the public API type is int - values outside
+            // short.MinValue..short.MaxValue silently wrap. Confirmed live in
+            // the Editor: an earlier version of this formula gave CULTA00's
+            // 10x10 grid a unit order of 100011, which Unity wrapped to
+            // -31061 - putting units BEHIND every tile instead of in front,
+            // leaving them just as invisible as before the fix.
+            int order = IsoProjection.UnitSortingOrder(9, 9, 0, 10, 10);
+            Assert.InRange(order, short.MinValue, short.MaxValue);
+        }
     }
 }
