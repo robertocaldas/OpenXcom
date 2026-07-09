@@ -1423,3 +1423,88 @@ Add to `IsoProjectionTests.cs`:
    scripted `execute_script` smoke test to confirm the gameplay loop is
    unaffected by this rendering-only change.
 3. Commit.
+
+---
+
+### Task 8 (added post-final-review, not in the original plan): fix click-to-move crash
+
+The final whole-branch review found a real cross-task integration bug that
+no per-task review could catch (Coplay cannot simulate mouse input, so the
+actual `Physics.Raycast` → tile-picking code path was never exercised by any
+prior verification in this phase — every prior gameplay check drove
+`BattleState` directly via `execute_script`, bypassing input entirely).
+
+**The bug:** `TileRenderer.Awake()` (Task 5, `unity/Assets/Scripts/Unity/Rendering/TileRenderer.cs`)
+adds its `BoxCollider` to `gameObject` itself — the `Tile_x_y_z` GameObject
+created by `BattlescapeMapView`. So a raycast hit's `hit.transform` IS the
+`Tile_x_y_z` transform, and `hit.transform.parent` is whatever that tile is
+parented under — the `Battlescape` GameObject (no underscores in its name).
+But `BattleController.TileUnderCursor` (pre-existing, from Phase 5) reads
+`hit.transform.parent.name.Split('_')` then `int.Parse(parts[1])` — on
+`"Battlescape"` (no `_`), `Split('_')` returns a 1-element array, and
+`parts[1]` throws `IndexOutOfRangeException`. **Every left-click-to-move
+crashes.** Unit selection and right-click-to-fire are unaffected — they
+call `FindUnitAt(hit.transform)` directly (no `.parent`), and `UnitRenderer`
+puts its own collider on the unit's own root GameObject the same way, so
+that path was never broken.
+
+**Fix:** change `TileUnderCursor` to read `hit.transform.name` directly
+(matching how unit-picking already works), not `hit.transform.parent.name`.
+
+**Files:**
+- Modify: `unity/Assets/Scripts/Unity/BattleController.cs` (`TileUnderCursor`)
+
+Change:
+
+```csharp
+        private Position TileUnderCursor(RaycastHit hit)
+        {
+            // Inverse of IsoProjection.MapToScreen; left as a direct pixel/world
+            // lookup against the hit tile's own TileRenderer name ("Tile_x_y_z"),
+            // since BattlescapeMapView already names each tile GameObject that
+            // way and this avoids re-deriving the iso inverse-projection math
+            // for this phase (no input-picking formula was ported yet — parent
+            // spec §5 names this as later work, "screen->tile picking").
+            var parts = hit.transform.parent.name.Split('_');
+            return new Position(int.Parse(parts[1]), int.Parse(parts[2]), int.Parse(parts[3]));
+        }
+```
+
+to:
+
+```csharp
+        private Position TileUnderCursor(RaycastHit hit)
+        {
+            // Inverse of IsoProjection.MapToScreen; left as a direct pixel/world
+            // lookup against the hit tile's own TileRenderer name ("Tile_x_y_z"),
+            // since BattlescapeMapView already names each tile GameObject that
+            // way and this avoids re-deriving the iso inverse-projection math
+            // for this phase (no input-picking formula was ported yet — parent
+            // spec §5 names this as later work, "screen->tile picking"). Reads
+            // hit.transform directly, NOT .parent: TileRenderer's BoxCollider
+            // (Task 5/6) sits on the Tile_x_y_z GameObject itself, so a raycast
+            // hit's transform IS that tile - .parent is the Battlescape root,
+            // which has no underscores and previously crashed this parse on
+            // every click (confirmed via the phase's final whole-branch review).
+            var parts = hit.transform.name.Split('_');
+            return new Position(int.Parse(parts[1]), int.Parse(parts[2]), int.Parse(parts[3]));
+        }
+```
+
+**Verification:**
+1. `check_compile_errors` in the live Editor.
+2. Since Coplay cannot simulate literal mouse clicks, verify via
+   `execute_script`: perform a real `Physics.Raycast` from the actual Main
+   Camera at a screen point that should land on a known tile (e.g. project
+   `IsoProjection.MapToScreen(3, 3, 0)` through the camera to get a world/
+   screen point, raycast there), confirm the hit's collider belongs to
+   `Tile_3_3_0`, then call `TileUnderCursor` (via reflection, same technique
+   Task 6/7 used for `BattleController`'s private members) on that real
+   `RaycastHit` and confirm it returns `Position(3,3,0)` without throwing —
+   this exercises the exact same `Physics.Raycast` → collider → transform
+   pipeline the real mouse-driven code path uses, just with a scripted
+   camera-to-world projection standing in for an actual mouse click.
+3. Also confirm unit-picking and fire are still unaffected (unchanged code
+   paths) — a quick re-run of the Task 6/7 scripted smoke test is sufficient,
+   no need to rebuild it from scratch.
+4. Commit.
