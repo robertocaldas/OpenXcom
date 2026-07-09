@@ -137,8 +137,13 @@ namespace OpenXcom.Unity
             // since BattlescapeMapView already names each tile GameObject that
             // way and this avoids re-deriving the iso inverse-projection math
             // for this phase (no input-picking formula was ported yet — parent
-            // spec §5 names this as later work, "screen->tile picking").
-            var parts = hit.transform.parent.name.Split('_');
+            // spec §5 names this as later work, "screen->tile picking"). Reads
+            // hit.transform directly, NOT .parent: TileRenderer's BoxCollider
+            // (Task 5/6) sits on the Tile_x_y_z GameObject itself, so a raycast
+            // hit's transform IS that tile - .parent is the Battlescape root,
+            // which has no underscores and previously crashed this parse on
+            // every click (confirmed via the phase's final whole-branch review).
+            var parts = hit.transform.name.Split('_');
             return new Position(int.Parse(parts[1]), int.Parse(parts[2]), int.Parse(parts[3]));
         }
 
