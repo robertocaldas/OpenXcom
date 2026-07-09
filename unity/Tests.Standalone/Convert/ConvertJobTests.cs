@@ -8,12 +8,13 @@ namespace OpenXcom.Core.Tests.Convert
     public class ConvertJobTests
     {
         private static readonly string DataDir = TestPaths.RawDataDir;
+        private static readonly string RulesDir = TestPaths.RulesDir;
 
         [Fact]
-        public void Run_ProducesPaletteTerrainUnitAndMapblockOutputs()
+        public void Run_ProducesPaletteTerrainUnitRulesAndMapblockOutputs()
         {
             string outDir = Path.Combine(Path.GetTempPath(), "xcomconv-" + System.Guid.NewGuid());
-            var written = ConvertJob.Run(DataDir, outDir);
+            var written = ConvertJob.Run(DataDir, RulesDir, outDir);
 
             Assert.Contains(written, p => p.EndsWith("palettes.json"));
             Assert.Contains(written, p => p == "terrain-CULTIVAT.png");
@@ -24,16 +25,47 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Contains(written, p => p == "tiles-BARN.json");
             Assert.Contains(written, p => p == "terrain-CULTA.datasets.json");
             Assert.Contains(written, p => p == "mapblock-CULTA00.json");
-            Assert.Contains(written, p => p.Contains("units") && p.EndsWith(".png"));
+            Assert.Contains(written, p => p == "units-XCOM_0.png");
+            Assert.Contains(written, p => p == "units-XCOM_0.frames.json");
+            Assert.Contains(written, p => p == "units-SECTOID.png");
+            Assert.Contains(written, p => p == "units-SECTOID.frames.json");
+            Assert.Contains(written, p => p == "units.json");
+            Assert.Contains(written, p => p == "armors.json");
+            Assert.Contains(written, p => p == "items.json");
             Assert.True(File.Exists(Path.Combine(outDir, "manifest.json")));
 
-            Assert.Equal(15, written.Count);
-            Assert.Contains("manifest.json", written);
+            Assert.Equal(20, written.Count);
             var manifestJson = File.ReadAllText(Path.Combine(outDir, "manifest.json"));
             var manifest = Newtonsoft.Json.Linq.JObject.Parse(manifestJson);
             var files = manifest["files"].Select(t => t.ToString()).ToList();
-            Assert.Equal(15, files.Count);
-            Assert.Contains("manifest.json", files);
+            Assert.Equal(20, files.Count);
+
+            // units.json: soldier + Sectoid, real stats.
+            var unitsJson = File.ReadAllText(Path.Combine(outDir, "units.json"));
+            var units = Newtonsoft.Json.Linq.JArray.Parse(unitsJson);
+            Assert.Equal(2, units.Count);
+            var sectoidUnit = units.Single(u => u["Id"].ToString() == "STR_SECTOID_SOLDIER");
+            Assert.Equal(54, (int)sectoidUnit["Stats"]["TimeUnits"]);
+            Assert.Equal("SECTOID_ARMOR0", sectoidUnit["ArmorId"].ToString());
+            var soldierUnit = units.Single(u => u["Id"].ToString() == "STR_SOLDIER");
+            Assert.Equal(50, (int)soldierUnit["Stats"]["TimeUnits"]);
+
+            // armors.json: Sectoid armor only, this slice.
+            var armorsJson = File.ReadAllText(Path.Combine(outDir, "armors.json"));
+            var armors = Newtonsoft.Json.Linq.JArray.Parse(armorsJson);
+            Assert.Single(armors);
+            Assert.Equal("SECTOID_ARMOR0", armors[0]["Id"].ToString());
+            Assert.Equal(4, (int)armors[0]["Front"]);
+
+            // items.json: rifle + plasma pistol, power/damageType from the clip.
+            var itemsJson = File.ReadAllText(Path.Combine(outDir, "items.json"));
+            var items = Newtonsoft.Json.Linq.JArray.Parse(itemsJson);
+            Assert.Equal(2, items.Count);
+            var rifle = items.Single(i => i["Id"].ToString() == "STR_RIFLE");
+            Assert.Equal(30, (int)rifle["Power"]);
+            Assert.True((bool)rifle["TwoHanded"]);
+            var pistol = items.Single(i => i["Id"].ToString() == "STR_PLASMA_PISTOL");
+            Assert.Equal(52, (int)pistol["Power"]);
 
             // terrain-CULTA.datasets.json content: ordered [BLANKS, CULTIVAT, BARN]
             // with real record counts (2, 37, 29 — verified against file sizes / 62).

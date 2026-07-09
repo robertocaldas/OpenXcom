@@ -28,7 +28,7 @@ namespace Xcom.Convert
     {
         private static readonly string[] CultaDatasets = { "BLANKS", "CULTIVAT", "BARN" };
 
-        public static IReadOnlyList<string> Run(string dataDir, string outDir)
+        public static IReadOnlyList<string> Run(string dataDir, string rulesDir, string outDir)
         {
             Directory.CreateDirectory(outDir);
             var written = new List<string>();
@@ -78,6 +78,17 @@ namespace Xcom.Convert
             written.Add("units-XCOM_0.png");
             written.Add("units-XCOM_0.frames.json");
 
+            // 3b. Alien unit sprite: SECTOID.
+            var sectoidFrames = PckDecoder.Load(
+                File.ReadAllBytes(Path.Combine(dataDir, "UNITS", "SECTOID.PCK")),
+                File.ReadAllBytes(Path.Combine(dataDir, "UNITS", "SECTOID.TAB")), 32, 40);
+            var sectoidSpriteAtlas = AtlasWriter.Build(sectoidFrames, pal);
+            AtlasWriter.Save(sectoidSpriteAtlas,
+                Path.Combine(outDir, "units-SECTOID.png"),
+                Path.Combine(outDir, "units-SECTOID.frames.json"));
+            written.Add("units-SECTOID.png");
+            written.Add("units-SECTOID.frames.json");
+
             // 4. Mapblock CULTA00: .MAP + .RMP -> one JSON.
             var block = MapBlockDecoder.LoadMap(
                 File.ReadAllBytes(Path.Combine(dataDir, "MAPS", "CULTA00.MAP")));
@@ -87,6 +98,25 @@ namespace Xcom.Convert
             File.WriteAllText(Path.Combine(outDir, "mapblock-CULTA00.json"),
                 JsonConvert.SerializeObject(block, Formatting.Indented));
             written.Add("mapblock-CULTA00.json");
+
+            // 5. Rules: XCom soldier + Sectoid stats, Sectoid armor, rifle + plasma pistol.
+            var soldier = RuleYamlDecoder.LoadSoldierUnit(Path.Combine(rulesDir, "soldiers.rul"), "STR_SOLDIER");
+            var sectoidUnit = RuleYamlDecoder.LoadAlienUnit(Path.Combine(rulesDir, "units.rul"), "STR_SECTOID_SOLDIER");
+            var sectoidArmor = RuleYamlDecoder.LoadArmor(Path.Combine(rulesDir, "armors.rul"), "SECTOID_ARMOR0");
+            var rifle = RuleYamlDecoder.LoadWeapon(Path.Combine(rulesDir, "items.rul"), "STR_RIFLE", "STR_RIFLE_CLIP");
+            var plasmaPistol = RuleYamlDecoder.LoadWeapon(Path.Combine(rulesDir, "items.rul"), "STR_PLASMA_PISTOL", "STR_PLASMA_PISTOL_CLIP");
+
+            File.WriteAllText(Path.Combine(outDir, "units.json"),
+                JsonConvert.SerializeObject(new[] { soldier, sectoidUnit }, Formatting.Indented));
+            written.Add("units.json");
+
+            File.WriteAllText(Path.Combine(outDir, "armors.json"),
+                JsonConvert.SerializeObject(new[] { sectoidArmor }, Formatting.Indented));
+            written.Add("armors.json");
+
+            File.WriteAllText(Path.Combine(outDir, "items.json"),
+                JsonConvert.SerializeObject(new[] { rifle, plasmaPistol }, Formatting.Indented));
+            written.Add("items.json");
 
             written.Add("manifest.json");
             File.WriteAllText(Path.Combine(outDir, "manifest.json"),

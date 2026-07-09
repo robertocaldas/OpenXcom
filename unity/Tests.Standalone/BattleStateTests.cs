@@ -16,7 +16,7 @@ namespace OpenXcom.Core.Tests
 
         private DataLoader.RawMapBlockData LoadRealCulta00Block()
         {
-            Xcom.Convert.ConvertJob.Run(TestPaths.RawDataDir, _outDir);
+            Xcom.Convert.ConvertJob.Run(TestPaths.RawDataDir, TestPaths.RulesDir, _outDir);
             return DataLoader.LoadMapBlock(_outDir, "CULTA00");
         }
 

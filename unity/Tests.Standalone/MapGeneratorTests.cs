@@ -28,7 +28,7 @@ namespace OpenXcom.Core.Tests
         {
             // Reuse the real ConvertJob to produce genuine GameData files, then
             // read them back exactly as the shipped pipeline would.
-            Xcom.Convert.ConvertJob.Run(DataDir, _outDir);
+            Xcom.Convert.ConvertJob.Run(DataDir, TestPaths.RulesDir, _outDir);
 
             var terrain = DataLoader.LoadTerrain(_outDir, "CULTA");
             var datasetTiles = new Dictionary<string, List<MapDataTile>>
