@@ -26,6 +26,7 @@ namespace OpenXcom.Unity.Rendering
         private SpriteRenderer _westWall;
         private SpriteRenderer _northWall;
         private SpriteRenderer _object;
+        private BoxCollider _collider;
 
         private void Awake()
         {
@@ -33,6 +34,9 @@ namespace OpenXcom.Unity.Rendering
             _westWall = CreateChild("WestWall");
             _northWall = CreateChild("NorthWall");
             _object = CreateChild("Object");
+
+            _collider = gameObject.AddComponent<BoxCollider>();
+            _collider.size = new Vector3(1f, 0.5f, 0.1f);
         }
 
         private SpriteRenderer CreateChild(string childName)

@@ -14,10 +14,10 @@ namespace OpenXcom.Unity
     /// Xcom.Convert — never committed) rather than importing it as a Unity
     /// asset, since the output is a regenerable derivative of copyrighted art.
     ///
-    /// NOTE: this class cannot be compiled or run in the environment this was
-    /// written in (no Unity Editor / UnityEngine assemblies available this
-    /// session). It follows documented Unity API behavior but has not been
-    /// visually verified — check it in the Editor before relying on it.
+    /// Runs in Awake (not Start) so BattlescapeBootstrap - which needs this
+    /// component's Grid to already exist - can safely read it from its own
+    /// Start(): Unity guarantees every component's Awake() on a GameObject
+    /// runs before any component's Start() on that same GameObject.
     /// </summary>
     public sealed class BattlescapeMapView : MonoBehaviour
     {
@@ -25,7 +25,10 @@ namespace OpenXcom.Unity
         [SerializeField] private string mapBlockName = "CULTA00";
         [SerializeField] private string[] datasetNames = { "BLANKS", "CULTIVAT", "BARN" };
 
-        private void Start()
+        /// <summary>The battle grid built from the mapblock this view rendered. Populated by Awake().</summary>
+        public TileGrid Grid { get; private set; }
+
+        private void Awake()
         {
             string gameDataDir = Path.Combine(Application.dataPath, "GameData");
 
@@ -36,19 +39,19 @@ namespace OpenXcom.Unity
             foreach (var name in datasetNames)
             {
                 datasetTiles[name] = DataLoader.LoadTiles(gameDataDir, name);
-                datasetAtlases[name] = LoadAtlas(gameDataDir, $"terrain-{name}");
+                datasetAtlases[name] = AtlasLoader.Load(gameDataDir, $"terrain-{name}");
             }
 
             var block = DataLoader.LoadMapBlock(gameDataDir, mapBlockName);
-            var grid = MapGenerator.Build(block, terrain, datasetTiles);
+            Grid = MapGenerator.Build(block, terrain, datasetTiles);
 
-            for (int z = 0; z < grid.Height; z++)
+            for (int z = 0; z < Grid.Height; z++)
             {
-                for (int y = 0; y < grid.Length; y++)
+                for (int y = 0; y < Grid.Length; y++)
                 {
-                    for (int x = 0; x < grid.Width; x++)
+                    for (int x = 0; x < Grid.Width; x++)
                     {
-                        var tile = grid.At(x, y, z);
+                        var tile = Grid.At(x, y, z);
                         if (tile.Floor == null && tile.WestWall == null &&
                             tile.NorthWall == null && tile.Object == null)
                             continue;
@@ -57,7 +60,7 @@ namespace OpenXcom.Unity
                         go.transform.SetParent(transform, worldPositionStays: false);
                         var renderer = go.AddComponent<TileRenderer>();
 
-                        renderer.Setup(x, y, z, grid.Width, grid.Length,
+                        renderer.Setup(x, y, z, Grid.Width, Grid.Length,
                             floorSprite: SpriteFor(tile.Floor, datasetAtlases),
                             floorYOffsetPixels: tile.Floor?.YOffset ?? 0,
                             westWallSprite: SpriteFor(tile.WestWall, datasetAtlases),
@@ -66,26 +69,6 @@ namespace OpenXcom.Unity
                     }
                 }
             }
-        }
-
-        private static (Texture2D texture, List<Rect> frameRects) LoadAtlas(string gameDataDir, string baseName)
-        {
-            byte[] pngBytes = File.ReadAllBytes(Path.Combine(gameDataDir, $"{baseName}.png"));
-            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-            texture.LoadImage(pngBytes);
-
-            string framesJson = File.ReadAllText(Path.Combine(gameDataDir, $"{baseName}.frames.json"));
-            var parsed = JsonUtility.FromJson<AtlasFramesJson>(framesJson);
-
-            var rects = new List<Rect>(parsed.frames.Length);
-            foreach (var f in parsed.frames)
-            {
-                // Atlas frame rects are in top-down image pixel space (AtlasWriter);
-                // Unity's Sprite.Create rect is bottom-up texture pixel space.
-                float flippedY = texture.height - f.y - f.h;
-                rects.Add(new Rect(f.x, flippedY, f.w, f.h));
-            }
-            return (texture, rects);
         }
 
         private static Sprite SpriteFor(MapDataTile part, Dictionary<string, (Texture2D texture, List<Rect> frameRects)> atlases)
@@ -101,11 +84,5 @@ namespace OpenXcom.Unity
             var rect = frameRects[frameIndex];
             return Sprite.Create(texture, rect, new Vector2(0.5f, 0f), pixelsPerUnit: Rendering.TileRenderer.PixelsPerUnit);
         }
-
-        [System.Serializable]
-        private struct AtlasFrameJson { public int x, y, w, h; }
-
-        [System.Serializable]
-        private struct AtlasFramesJson { public AtlasFrameJson[] frames; }
     }
 }
