@@ -31,6 +31,19 @@ namespace OpenXcom.Unity
         private static readonly Position SectoidAPos = new(8, 8, 0);
         private static readonly Position SectoidBPos = new(7, 8, 0);
 
+        /// <summary>
+        /// Unit .PCK raw frame indices for drawRoutine0's (soldiers,
+        /// Sectoids) standing pose, direction 4 = south / facing the camera
+        /// (UnitSprite.cpp:290-369,620; Pathfinding.h:220 for the direction
+        /// convention). Each part is a separate frame - there is no single
+        /// "standing soldier" frame in the raw sheet.
+        /// </summary>
+        private const int SouthDirection = 4;
+        private const int LegsStandBase = 16;
+        private const int RightArmStandBase = 8;
+        private const int MaleTorsoBase = 32;
+        private const int LeftArmStandBase = 0;
+
         private void Start()
         {
             string gameDataDir = Path.Combine(Application.dataPath, "GameData");
@@ -74,10 +87,19 @@ namespace OpenXcom.Unity
             var go = new GameObject(name);
             go.transform.SetParent(transform, worldPositionStays: false);
             var renderer = go.AddComponent<UnitRenderer>();
-            var sprite = Sprite.Create(atlas.texture, atlas.frameRects[0], new Vector2(0.5f, 0f), TileRenderer.PixelsPerUnit);
-            renderer.Setup(position.X, position.Y, position.Z, grid.Width, grid.Length, sprite);
+            var legs = FrameSprite(atlas, LegsStandBase + SouthDirection);
+            var rightArm = FrameSprite(atlas, RightArmStandBase + SouthDirection);
+            var torso = FrameSprite(atlas, MaleTorsoBase + SouthDirection);
+            var leftArm = FrameSprite(atlas, LeftArmStandBase + SouthDirection);
+            renderer.Setup(position.X, position.Y, position.Z, grid.Width, grid.Length, legs, rightArm, torso, leftArm);
 
             unitTransforms[unit] = go.transform;
+        }
+
+        private static Sprite FrameSprite(
+            (Texture2D texture, List<Rect> frameRects) atlas, int frameIndex)
+        {
+            return Sprite.Create(atlas.texture, atlas.frameRects[frameIndex], new Vector2(0.5f, 0f), TileRenderer.PixelsPerUnit);
         }
     }
 }

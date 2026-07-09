@@ -68,16 +68,41 @@ namespace OpenXcom.Core.Tests.Unity
         public void UnitSortingOrder_AlwaysExceedsAnyTilesSortingOrderInThatGrid()
         {
             int maxPossibleTileOrder = IsoProjection.SortingOrder(9, 9, 0, 10, 10, IsoProjection.PartRank.Object);
-            int unitOrderAtOrigin = IsoProjection.UnitSortingOrder(0, 0, 0, 10, 10);
+            int unitOrderAtOrigin = IsoProjection.UnitSortingOrder(0, 0, 0, 10, 10, IsoProjection.UnitPartRank.Legs);
             Assert.True(unitOrderAtOrigin > maxPossibleTileOrder);
         }
 
         [Fact]
         public void UnitSortingOrder_UsesZYXAsATiebreakAmongUnits()
         {
-            int a = IsoProjection.UnitSortingOrder(1, 1, 0, 10, 10);
-            int b = IsoProjection.UnitSortingOrder(2, 1, 0, 10, 10);
+            int a = IsoProjection.UnitSortingOrder(1, 1, 0, 10, 10, IsoProjection.UnitPartRank.Legs);
+            int b = IsoProjection.UnitSortingOrder(2, 1, 0, 10, 10, IsoProjection.UnitPartRank.Legs);
             Assert.True(b > a);
+        }
+
+        [Fact]
+        public void UnitSortingOrder_WithinOneUnit_PartsOrderLegsThenRightArmThenTorsoThenLeftArm()
+        {
+            // Matches UnitSprite.cpp:620's direction-4 (south) blit order:
+            // legs, rightArm, torso, leftArm, back-to-front.
+            int legs = IsoProjection.UnitSortingOrder(5, 5, 0, 10, 10, IsoProjection.UnitPartRank.Legs);
+            int rightArm = IsoProjection.UnitSortingOrder(5, 5, 0, 10, 10, IsoProjection.UnitPartRank.RightArm);
+            int torso = IsoProjection.UnitSortingOrder(5, 5, 0, 10, 10, IsoProjection.UnitPartRank.Torso);
+            int leftArm = IsoProjection.UnitSortingOrder(5, 5, 0, 10, 10, IsoProjection.UnitPartRank.LeftArm);
+            Assert.True(legs < rightArm);
+            Assert.True(rightArm < torso);
+            Assert.True(torso < leftArm);
+        }
+
+        [Fact]
+        public void UnitSortingOrder_NeverCollidesBetweenAdjacentUnits()
+        {
+            // No two units share a tileIndex (one occupant per tile), but the
+            // per-part sub-order must still not let one unit's highest part
+            // (LeftArm) collide with or exceed the next tile's lowest part (Legs).
+            int highestPartAtEarlierTile = IsoProjection.UnitSortingOrder(4, 5, 0, 10, 10, IsoProjection.UnitPartRank.LeftArm);
+            int lowestPartAtNextTile = IsoProjection.UnitSortingOrder(5, 5, 0, 10, 10, IsoProjection.UnitPartRank.Legs);
+            Assert.True(highestPartAtEarlierTile < lowestPartAtNextTile);
         }
 
         [Fact]
@@ -90,7 +115,7 @@ namespace OpenXcom.Core.Tests.Unity
             // 10x10 grid a unit order of 100011, which Unity wrapped to
             // -31061 - putting units BEHIND every tile instead of in front,
             // leaving them just as invisible as before the fix.
-            int order = IsoProjection.UnitSortingOrder(9, 9, 0, 10, 10);
+            int order = IsoProjection.UnitSortingOrder(9, 9, 0, 10, 10, IsoProjection.UnitPartRank.LeftArm);
             Assert.InRange(order, short.MinValue, short.MaxValue);
         }
     }
