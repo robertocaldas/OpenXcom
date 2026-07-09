@@ -142,6 +142,38 @@ mod-authored scripts are parsed and JIT-interpreted through this system.
 - `md5.cpp`, `lodepng.cpp`, `libs/miniz` — vendored third-party utility code
   (checksums, PNG decode, zip/mod-archive handling).
 
+## Unity rewrite (`unity/` subdirectory)
+
+`unity/` contains a from-scratch C#/Unity rewrite of this engine — not a
+transpile. It reuses the original 1994 X-COM graphics/rulesets (converted
+offline) but has clean-slate code, no mod support, no save-compat with this
+C++ engine. Treat it as a separate project sharing this repo; `src/` is only
+a reference spec for its ports (formulas, file formats).
+
+- `unity/Xcom.Convert` — offline .NET CLI that decodes original UFO data
+  (`unity/RawData/`, gitignored) into PNG atlases + JSON under
+  `unity/Assets/GameData/` (also gitignored).
+- `unity/Assets/Scripts/Core` (`OpenXcom.Core` namespace) — pure C#, zero
+  UnityEngine references (`noEngineReferences: true` asmdef), so gameplay
+  logic is testable without the Editor.
+- `unity/Assets/Scripts/Unity` (`OpenXcom.Unity` namespace) — MonoBehaviours
+  (rendering/input). One-way dependency on Core. **No Unity Editor exists in
+  this dev environment** — files here have never been compiled or run;
+  verify in-Editor before trusting them.
+- `unity/Tests.Standalone` — xUnit project (`dotnet test`), compiles Core +
+  Convert directly. Primary verification loop. Needs
+  `export PATH="$HOME/.dotnet:$PATH"` in non-interactive shells (.NET SDK is
+  at `~/.dotnet`, not on PATH by default there).
+
+Status: Phases 1-5 (converter, static map render, units/movement, combat &
+LOS, enemy AI + turn/win-loss) are complete and merged — the first vertical
+slice (a full squad-vs-squad skirmish loop) is done end-to-end at the code
+level, but nothing wires it into an actual Unity scene yet (no bootstrap
+calling `BattleController.Bind`/`BattleState.SpawnAtRouteNodes`), so it has
+never been run. Design/plan docs for each phase live under
+`docs/superpowers/specs/` and `docs/superpowers/plans/`
+(`2026-07-04-battlescape-skirmish-design.md` is the parent spec).
+
 ## Notes for making changes
 
 - New gameplay behavior driven by data (numbers, toggles, new unit/item
