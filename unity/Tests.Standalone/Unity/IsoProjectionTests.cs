@@ -53,5 +53,15 @@ namespace OpenXcom.Core.Tests.Unity
             int later = IsoProjection.SortingOrder(0, 1, 0, 10, 10, IsoProjection.PartRank.Floor);
             Assert.True(later > earlier);
         }
+
+        [Fact]
+        public void SortingOrder_UnitRankIsAboveObjectButBelowTheNextTilesFloor()
+        {
+            int obj = IsoProjection.SortingOrder(5, 5, 0, 10, 10, IsoProjection.PartRank.Object);
+            int unit = IsoProjection.SortingOrder(5, 5, 0, 10, 10, IsoProjection.PartRank.Unit);
+            int nextTileFloor = IsoProjection.SortingOrder(6, 5, 0, 10, 10, IsoProjection.PartRank.Floor);
+            Assert.True(unit > obj);
+            Assert.True(unit < nextTileFloor);
+        }
     }
 }

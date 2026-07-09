@@ -12,13 +12,14 @@ namespace OpenXcom.Unity.Rendering
         public const int SpriteWidth = 32;
         public const int SpriteHeight = 40;
 
-        /// <summary>Tile-part draw rank within one tile: floor, west wall, north wall, object.</summary>
+        /// <summary>Tile-part draw rank within one tile: floor, west wall, north wall, object, unit.</summary>
         public enum PartRank
         {
             Floor = 0,
             WestWall = 1,
             NorthWall = 2,
             Object = 3,
+            Unit = 4,
         }
 
         /// <summary>
@@ -40,7 +41,7 @@ namespace OpenXcom.Unity.Rendering
         public static int SortingOrder(int x, int y, int z, int mapWidth, int mapLength, PartRank part)
         {
             long tileIndex = ((long)z * mapLength + y) * mapWidth + x;
-            return (int)(tileIndex * 4 + (int)part);
+            return (int)(tileIndex * 5 + (int)part);
         }
     }
 }
