@@ -91,9 +91,11 @@ instead of calling the static factories.
   terrain/tiles/mapblock (same loading `BattlescapeMapView` already does)
   plus `units.json`/`armors.json`/`items.json`, builds the hardcoded 2v2
   squad as `BattleUnit`s with real `RuleUnit`/`RuleArmor`/`RuleItem` data,
-  calls `BattleState.SpawnAtRouteNodes`, instantiates one `UnitRenderer` per
-  unit, and calls `battleController.Bind(state, transforms)`. Everything is
-  constructed in code — no Inspector drag-and-drop references required.
+  places them at fixed coordinates (see §6 — CULTA00 has only one route
+  node, so `SpawnAtRouteNodes` isn't usable for a 4-unit squad), instantiates
+  one `UnitRenderer` per unit, and calls `battleController.Bind(state,
+  transforms)`. Everything is constructed in code — no Inspector
+  drag-and-drop references required.
 - **`Assets/Scenes/Battlescape.unity`** (new): orthographic camera + one
   GameObject holding `BattlescapeMapView` (or folded into
   `BattlescapeBootstrap`) + `BattleController`. Built and saved live through
@@ -112,6 +114,16 @@ Explicitly deferred, so a future session knows what's still stubbed:
   `BattleState.SpawnAtRouteNodes` doesn't consume deployment data at all
   (see its `[SIMPLIFIED]` doc comment), so parsing these files would be dead
   work for this slice.
+- **No route-node-based spawning.** `CULTA00.RMP` (verified this session by
+  parsing the raw file: 24 bytes = exactly one 24-byte record) has only one
+  route node, so `BattleState.SpawnAtRouteNodes` can't seat a 4-unit squad.
+  `BattlescapeBootstrap` places all 4 units at fixed hardcoded coordinates
+  instead (every tile in CULTA00 is walkable, confirmed by resolving all 100
+  tiles' `Floor`/`NoFloor`, so any coordinates work) — the same
+  `Position`/`Grid[pos].Occupant`/`Units.Add` assignment
+  `SpawnAtRouteNodes` does internally, just not routed through that method.
+  Real route-node-driven spawn placement is deferred to whichever future
+  slice adds a mapblock with enough nodes for it to matter.
 - **No soldier stat randomization.** `STR_SOLDIER`'s `minStats` is used as a
   fixed baseline; `maxStats`/stat-roll-on-recruit is not implemented.
 - **No ammo/clip inventory model.** Weapon `power` is flattened from the
