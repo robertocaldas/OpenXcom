@@ -70,6 +70,65 @@ namespace OpenXcom.Core.Rules
             return JsonConvert.DeserializeObject<RawMapBlockData>(json);
         }
 
+        public static List<RuleArmor> LoadArmors(string gameDataDir)
+        {
+            string path = Path.Combine(gameDataDir, "armors.json");
+            string json = File.ReadAllText(path);
+            var raw = JsonConvert.DeserializeObject<List<RawArmorEntry>>(json);
+
+            var result = new List<RuleArmor>(raw.Count);
+            foreach (var r in raw)
+                result.Add(new RuleArmor(r.Id, r.Front, r.Side, r.Rear, r.Under));
+            return result;
+        }
+
+        public static List<RuleUnit> LoadUnits(string gameDataDir, IReadOnlyDictionary<string, RuleArmor> armorsById)
+        {
+            string path = Path.Combine(gameDataDir, "units.json");
+            string json = File.ReadAllText(path);
+            var raw = JsonConvert.DeserializeObject<List<RawUnitEntry>>(json);
+
+            var result = new List<RuleUnit>(raw.Count);
+            foreach (var r in raw)
+            {
+                var armor = !string.IsNullOrEmpty(r.ArmorId) && armorsById.TryGetValue(r.ArmorId, out var a)
+                    ? a : RuleArmor.None;
+                var stats = new UnitStats
+                {
+                    TimeUnits = r.Stats.TimeUnits, Stamina = r.Stats.Stamina, Health = r.Stats.Health,
+                    Bravery = r.Stats.Bravery, Reactions = r.Stats.Reactions, Firing = r.Stats.Firing,
+                    Throwing = r.Stats.Throwing, Strength = r.Stats.Strength, Melee = r.Stats.Melee,
+                };
+                result.Add(new RuleUnit(r.Id, stats, armor));
+            }
+            return result;
+        }
+
+        public static List<RuleItem> LoadItems(string gameDataDir)
+        {
+            string path = Path.Combine(gameDataDir, "items.json");
+            string json = File.ReadAllText(path);
+            var raw = JsonConvert.DeserializeObject<List<RawItemEntry>>(json);
+
+            var result = new List<RuleItem>(raw.Count);
+            foreach (var r in raw)
+            {
+                result.Add(new RuleItem(r.Id)
+                {
+                    TwoHanded = r.TwoHanded,
+                    Power = r.Power,
+                    DamageType = (DamageType)r.DamageType,
+                    AccuracySnap = r.AccuracySnap,
+                    AccuracyAimed = r.AccuracyAimed,
+                    AccuracyAuto = r.AccuracyAuto,
+                    TuSnap = r.TuSnap,
+                    TuAimed = r.TuAimed,
+                    TuAuto = r.TuAuto,
+                });
+            }
+            return result;
+        }
+
         // --- JSON-shaped DTOs matching Xcom.Convert's emitted field names ---
 
         private sealed class RawMcdRecord
@@ -131,6 +190,49 @@ namespace OpenXcom.Core.Rules
             public int Height { get; set; }
             public List<RawMapBlockTile> Tiles { get; set; }
             public List<RawRouteNode> RouteNodes { get; set; }
+        }
+
+        private sealed class RawUnitStats
+        {
+            public int TimeUnits { get; set; }
+            public int Stamina { get; set; }
+            public int Health { get; set; }
+            public int Bravery { get; set; }
+            public int Reactions { get; set; }
+            public int Firing { get; set; }
+            public int Throwing { get; set; }
+            public int Strength { get; set; }
+            public int Melee { get; set; }
+        }
+
+        private sealed class RawUnitEntry
+        {
+            public string Id { get; set; }
+            public RawUnitStats Stats { get; set; }
+            public string ArmorId { get; set; }
+        }
+
+        private sealed class RawArmorEntry
+        {
+            public string Id { get; set; }
+            public int Front { get; set; }
+            public int Side { get; set; }
+            public int Rear { get; set; }
+            public int Under { get; set; }
+        }
+
+        private sealed class RawItemEntry
+        {
+            public string Id { get; set; }
+            public bool TwoHanded { get; set; }
+            public int Power { get; set; }
+            public int DamageType { get; set; }
+            public int AccuracySnap { get; set; }
+            public int AccuracyAimed { get; set; }
+            public int AccuracyAuto { get; set; }
+            public int TuSnap { get; set; }
+            public int TuAimed { get; set; }
+            public int TuAuto { get; set; }
         }
     }
 }
