@@ -59,6 +59,17 @@ namespace OpenXcom.Unity
                 _unitTransforms[kv.Key] = kv.Value;
         }
 
+        /// <summary>Ends the player's turn. Same effect as pressing Backspace
+        /// (see Update) - exposed so the HUD's End Turn button (Task 6) can
+        /// call it from a UnityEvent, which requires a public no-arg method.</summary>
+        public void EndTurnFromHud()
+        {
+            if (_state == null || _state.IsBattleOver)
+                return;
+            _state.EndPlayerTurn();
+            DrainAndAnimate();
+        }
+
         private void Update()
         {
             UpdateHover();
