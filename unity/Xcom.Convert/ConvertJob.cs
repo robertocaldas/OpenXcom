@@ -28,7 +28,7 @@ namespace Xcom.Convert
     {
         private static readonly string[] CultaDatasets = { "BLANKS", "CULTIVAT", "BARN" };
 
-        public static IReadOnlyList<string> Run(string dataDir, string rulesDir, string outDir)
+        public static IReadOnlyList<string> Run(string dataDir, string rulesDir, string commonDir, string outDir)
         {
             Directory.CreateDirectory(outDir);
             var written = new List<string>();
@@ -88,6 +88,38 @@ namespace Xcom.Convert
                 Path.Combine(outDir, "units-SECTOID.frames.json"));
             written.Add("units-SECTOID.png");
             written.Add("units-SECTOID.frames.json");
+
+            // 3c. CURSOR.PCK: tile-selector cursor (32x40, 17 frames).
+            var cursorFrames = PckDecoder.Load(
+                File.ReadAllBytes(Path.Combine(dataDir, "UFOGRAPH", "CURSOR.PCK")),
+                File.ReadAllBytes(Path.Combine(dataDir, "UFOGRAPH", "CURSOR.TAB")), 32, 40);
+            var cursorAtlas = AtlasWriter.Build(cursorFrames, pal);
+            AtlasWriter.Save(cursorAtlas,
+                Path.Combine(outDir, "cursor.png"),
+                Path.Combine(outDir, "cursor.frames.json"));
+            written.Add("cursor.png");
+            written.Add("cursor.frames.json");
+
+            // 3d. ICONS.PCK: icon bar background, single 320x56 frame, no .TAB.
+            var iconsFrames = PckDecoder.Load(
+                File.ReadAllBytes(Path.Combine(dataDir, "UFOGRAPH", "ICONS.PCK")),
+                System.Array.Empty<byte>(), 320, 56);
+            var iconsAtlas = AtlasWriter.Build(iconsFrames, pal);
+            AtlasWriter.Save(iconsAtlas,
+                Path.Combine(outDir, "icons.png"),
+                Path.Combine(outDir, "icons.frames.json"));
+            written.Add("icons.png");
+            written.Add("icons.frames.json");
+
+            // 3e. Pathfinding.png: OXCE-bundled path-preview arrow sheet, already
+            // a true-color PNG (12 cols x 2 rows of 32x40) - no palette decode.
+            GridSpriteSheet.Convert(
+                Path.Combine(commonDir, "Resources", "Pathfinding", "Pathfinding.png"),
+                Path.Combine(outDir, "pathfinding.png"),
+                Path.Combine(outDir, "pathfinding.frames.json"),
+                frameWidth: 32, frameHeight: 40, columns: 12, rows: 2);
+            written.Add("pathfinding.png");
+            written.Add("pathfinding.frames.json");
 
             // 4. Mapblock CULTA00: .MAP + .RMP -> one JSON.
             var block = MapBlockDecoder.LoadMap(

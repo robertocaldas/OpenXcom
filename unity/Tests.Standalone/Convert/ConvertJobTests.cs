@@ -9,12 +9,13 @@ namespace OpenXcom.Core.Tests.Convert
     {
         private static readonly string DataDir = TestPaths.RawDataDir;
         private static readonly string RulesDir = TestPaths.RulesDir;
+        private static readonly string CommonDir = TestPaths.CommonDir;
 
         [Fact]
         public void Run_ProducesPaletteTerrainUnitRulesAndMapblockOutputs()
         {
             string outDir = Path.Combine(Path.GetTempPath(), "xcomconv-" + System.Guid.NewGuid());
-            var written = ConvertJob.Run(DataDir, RulesDir, outDir);
+            var written = ConvertJob.Run(DataDir, RulesDir, CommonDir, outDir);
 
             Assert.Contains(written, p => p.EndsWith("palettes.json"));
             Assert.Contains(written, p => p == "terrain-CULTIVAT.png");
@@ -32,13 +33,38 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Contains(written, p => p == "units.json");
             Assert.Contains(written, p => p == "armors.json");
             Assert.Contains(written, p => p == "items.json");
+            Assert.Contains(written, p => p == "cursor.png");
+            Assert.Contains(written, p => p == "cursor.frames.json");
+            Assert.Contains(written, p => p == "icons.png");
+            Assert.Contains(written, p => p == "icons.frames.json");
+            Assert.Contains(written, p => p == "pathfinding.png");
+            Assert.Contains(written, p => p == "pathfinding.frames.json");
             Assert.True(File.Exists(Path.Combine(outDir, "manifest.json")));
 
-            Assert.Equal(20, written.Count);
+            Assert.Equal(26, written.Count);
             var manifestJson = File.ReadAllText(Path.Combine(outDir, "manifest.json"));
             var manifest = Newtonsoft.Json.Linq.JObject.Parse(manifestJson);
             var files = manifest["files"].Select(t => t.ToString()).ToList();
-            Assert.Equal(20, files.Count);
+            Assert.Equal(26, files.Count);
+
+            // icons.png: single 320x56 frame (no companion .TAB on disk).
+            var iconsFramesJson = File.ReadAllText(Path.Combine(outDir, "icons.frames.json"));
+            var iconsFrames = Newtonsoft.Json.Linq.JObject.Parse(iconsFramesJson)["frames"];
+            Assert.Single(iconsFrames);
+            Assert.Equal(320, (int)iconsFrames[0]["w"]);
+            Assert.Equal(56, (int)iconsFrames[0]["h"]);
+
+            // cursor.png: 32x40 frames, at least the 2 the tile selector needs.
+            var cursorFramesJson = File.ReadAllText(Path.Combine(outDir, "cursor.frames.json"));
+            var cursorFrames = Newtonsoft.Json.Linq.JObject.Parse(cursorFramesJson)["frames"];
+            Assert.True(cursorFrames.Count() >= 2);
+            Assert.Equal(32, (int)cursorFrames[0]["w"]);
+            Assert.Equal(40, (int)cursorFrames[0]["h"]);
+
+            // pathfinding.png: 24 frames (12 cols x 2 rows), 32x40 each.
+            var pathFramesJson = File.ReadAllText(Path.Combine(outDir, "pathfinding.frames.json"));
+            var pathFrames = Newtonsoft.Json.Linq.JObject.Parse(pathFramesJson)["frames"];
+            Assert.Equal(24, pathFrames.Count());
 
             // units.json: soldier + Sectoid, real stats.
             var unitsJson = File.ReadAllText(Path.Combine(outDir, "units.json"));

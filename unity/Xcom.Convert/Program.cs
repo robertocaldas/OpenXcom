@@ -8,8 +8,9 @@ namespace Xcom.Convert
         {
             string dataDir = ArgValue(args, "--data") ?? "../RawData/Resources/UFO";
             string rulesDir = ArgValue(args, "--rules") ?? "../../bin/standard/xcom1";
+            string commonDir = ArgValue(args, "--common") ?? "../RawData/Resources/common";
             string outDir = ArgValue(args, "--out") ?? "../Assets/GameData";
-            var written = ConvertJob.Run(dataDir, rulesDir, outDir);
+            var written = ConvertJob.Run(dataDir, rulesDir, commonDir, outDir);
             Console.WriteLine($"Wrote {written.Count} files to {outDir}");
             return 0;
         }

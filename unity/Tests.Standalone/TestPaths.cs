@@ -19,5 +19,8 @@ namespace OpenXcom.Core.Tests
 
         public static readonly string RulesDir = Path.Combine(
             AppContext.BaseDirectory, "..", "..", "..", "..", "..", "bin", "standard", "xcom1");
+
+        public static readonly string CommonDir = Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "RawData", "Resources", "common");
     }
 }
