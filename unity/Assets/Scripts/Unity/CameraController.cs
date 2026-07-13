@@ -12,8 +12,8 @@ namespace OpenXcom.Unity
     /// clamping: the original keeps the exact screen-center map coordinate
     /// inside [0, mapSize-1] via an iterative inverse-projection check
     /// (Camera::scrollXY, Camera.cpp:326-350); this port instead clamps the
-    /// camera's world position to the map's own screen-space bounding box
-    /// (computed once from its 4 corners) plus a half-viewport margin -
+    /// camera's world position directly to the map's own screen-space
+    /// bounding box (computed once from its 4 corners, no margin) -
     /// visually equivalent for CULTA00's flat 10x10 grid, cheaper, and
     /// doesn't need the original's per-frame inverse-projection iteration.
     /// </summary>
@@ -28,13 +28,11 @@ namespace OpenXcom.Unity
 
         [SerializeField] private BattlescapeMapView mapView;
 
-        private Camera _camera;
         private BattleController _battleController;
         private float _unitsPerSecond;
 
         private void Awake()
         {
-            _camera = GetComponent<Camera>();
             _unitsPerSecond = CameraScroll.UnitsPerSecond(ScrollSpeed, ScrollIntervalMs, TileRenderer.PixelsPerUnit);
         }
 

@@ -134,6 +134,10 @@ namespace OpenXcom.Unity
             if (raycastCamera == null)
                 return;
 
+            if (UnityEngine.EventSystems.EventSystem.current != null
+                && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
+                return; // mouse is over a uGUI element (the icon bar) - not the 3D map
+
             var ray = raycastCamera.ScreenPointToRay(Input.mousePosition);
             if (!Physics.Raycast(ray, out var hit))
                 return;
