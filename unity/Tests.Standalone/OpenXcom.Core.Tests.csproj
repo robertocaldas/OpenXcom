@@ -14,6 +14,8 @@
     <Compile Include="../Assets/Scripts/Core/**/*.cs" />
     <!-- Pure-math iso projection helper: no UnityEngine dependency, testable here. -->
     <Compile Include="../Assets/Scripts/Unity/Rendering/IsoProjection.cs" />
+    <!-- Pure-math camera scroll helper: no UnityEngine dependency, testable here. -->
+    <Compile Include="../Assets/Scripts/Unity/Rendering/CameraScroll.cs" />
   </ItemGroup>
 
   <ItemGroup>
