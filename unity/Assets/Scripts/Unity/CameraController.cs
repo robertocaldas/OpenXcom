@@ -58,8 +58,8 @@ namespace OpenXcom.Unity
         private void HandleEdgeScroll()
         {
             float viewportHeightPixels = Screen.height - IconBarHeightPixels;
-            float mouseYFromTop = viewportHeightPixels - Input.mousePosition.y;
-            if (mouseYFromTop < 0f)
+            float mouseYFromTop = Screen.height - Input.mousePosition.y;
+            if (mouseYFromTop > viewportHeightPixels)
                 return; // mouse is over the icon bar, not the map viewport
 
             var (dx, dy) = CameraScroll.EdgeScrollDirection(
