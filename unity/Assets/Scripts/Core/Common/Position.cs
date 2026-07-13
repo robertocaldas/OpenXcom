@@ -51,5 +51,17 @@ namespace OpenXcom.Core.Common
         };
 
         public static bool IsDiagonal(int dir) => (dir & 1) == 1;
+
+        /// <summary>Reverse lookup of Offsets: which of the 8 compass indices
+        /// this delta is, or -1 if it isn't one of them. Used by path-preview
+        /// rendering (Phase 7) to pick an arrow frame from a PathStep-to-
+        /// PathStep delta.</summary>
+        public static int IndexOf(Position delta)
+        {
+            for (int i = 0; i < Offsets.Length; i++)
+                if (Offsets[i] == delta)
+                    return i;
+            return -1;
+        }
     }
 }
