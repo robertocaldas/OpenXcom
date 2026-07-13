@@ -33,8 +33,9 @@ existing live Unity Editor session (Coplay MCP) the same way Phase 6 was:
 1. **Camera** — edge-scroll, arrow-key scroll, center-on-unit, no zoom.
 2. **HUD** — the icon bar (`ICONS.PCK`) at its exact original layout, plus
    a selected-unit info panel (name/TU/Health/Energy).
-3. **Mouse interaction** — tile-selector cursor and TU-cost-colored
-   movement path preview, both from `CURSOR.PCK`.
+3. **Mouse interaction** — tile-selector cursor (`CURSOR.PCK`) and
+   TU-cost-colored movement path preview (OXCE's separate bundled
+   `Pathfinding.png` arrow sheet — see §5).
 
 ## 3. Camera — `CameraController`
 
@@ -119,22 +120,30 @@ list too) — the bar is omitted, not faked with a placeholder value.
 
 ## 5. Mouse interaction
 
-Both features below read from the same converted sprite sheet,
-`CURSOR.PCK` (confirmed via `Mod.cpp:5718`, decoded at 32×40 — identical
-frame size to the unit sprites already handled by
-`PckDecoder.Load(..., 32, 40)`, so no new decoder path is needed, only a
-new conversion call in `ConvertJob`).
+The tile-selector cursor and the path-preview arrows come from **two
+different** converted sprite sheets — corrected during planning after
+tracing the actual draw calls in `Map.cpp` (an earlier draft of this spec
+assumed both were `CURSOR.PCK`; they aren't):
 
-- **Tile-selector cursor:** highlights the tile under the mouse (ported
-  from `Map.cpp`'s `CURSOR.PCK` frame draw at the hovered tile position),
-  using the same `IsoProjection.MapToScreen` math `TileRenderer` and
-  `UnitRenderer` already use.
-- **Path preview:** while a unit is selected and the mouse hovers a
-  reachable tile, draw one arrow sprite per step of the path from the
-  unit to the cursor, colored by cumulative TU cost against the unit's
-  remaining `TimeUnits` (yellow = affordable, red = not — porting the
-  `Pathfinding::yellow`/`::red` distinction from `Pathfinding.cpp:39-41`).
-  **No Core changes required**: `Pathfinding.FindPath(grid, start, goal)`
+- **Tile-selector cursor:** `CURSOR.PCK` (confirmed via `Mod.cpp:5718`,
+  decoded at 32×40 — identical frame size to the unit sprites already
+  handled by `PckDecoder.Load(..., 32, 40)`, so no new decoder path is
+  needed). Highlights the tile under the mouse (ported from `Map.cpp`'s
+  `CURSOR.PCK` frame draw at the hovered tile position — frames 0/1,
+  flashing, `Map.cpp:1560`), using the same `IsoProjection.MapToScreen`
+  math `TileRenderer`/`UnitRenderer` already use.
+- **Path preview:** a *separate* sheet, OXCE's own bundled
+  `Resources/Pathfinding/Pathfinding.png` (`Map.cpp:1298`'s
+  `getSurfaceSet("Pathfinding")`, declared in `extraSprites.rul` as a
+  384×80px, 12-column grid of 32×40 frames — already a plain true-color
+  PNG, not an indexed `.PCK`, so no palette/PckDecoder involved, only a
+  grid-slice conversion). While a unit is selected and the mouse hovers a
+  reachable tile, draw one arrow sprite per step of the path from the unit
+  to the cursor, colored by cumulative TU cost against the unit's
+  remaining `TimeUnits` (yellow = affordable, red = not — a simplified
+  two-color take on the original's red/yellow/green marker-color system,
+  `Pathfinding::red`/`::yellow`, `Pathfinding.cpp:39-41`). **No Core
+  changes required**: `Pathfinding.FindPath(grid, start, goal)`
   (`Battle/Pathfinding.cs:58`) is already a pure, non-mutating query that
   returns `List<PathStep>` (`Position` + `StepCost`) — `BattleState.TryMove`
   merely happens to call it and then commit the walk. The hover handler
@@ -143,13 +152,22 @@ new conversion call in `ConvertJob`).
 
 ## 6. `Xcom.Convert` additions
 
-Two new sprite-atlas conversions in `ConvertJob`, both reusing the
-existing `PckDecoder.Load`/`AtlasWriter.Build`/`.Save` pipeline exactly as
-`SECTOID.PCK` was added in Phase 6 Task 2:
+Three new sprite-sheet conversions in `ConvertJob`:
 
-- `CURSOR.PCK`/`.TAB` (32×40) → `cursor.png` / `cursor.frames.json`.
-- `ICONS.PCK` (no `.TAB`, single 320×56 frame) → `icons.png` /
-  `icons.frames.json`.
+- `CURSOR.PCK`/`.TAB` (32×40) → `cursor.png` / `cursor.frames.json`, and
+  `ICONS.PCK` (no `.TAB`, single 320×56 frame) → `icons.png` /
+  `icons.frames.json` — both reuse the existing
+  `PckDecoder.Load`/`AtlasWriter.Build`/`.Save` pipeline exactly as
+  `SECTOID.PCK` was added in Phase 6 Task 2.
+- `Resources/Pathfinding/Pathfinding.png` → `pathfinding.png` /
+  `pathfinding.frames.json` — a new, much simpler path: since the source
+  is already a true-color grid-laid-out PNG (not an indexed `.PCK`), this
+  only copies the file and computes frame rects from the known 12×2 grid,
+  no palette or `PckDecoder` involved. This file lives under a sibling
+  data root (`unity/RawData/Resources/common/`, not the existing
+  `unity/RawData/Resources/UFO/` `dataDir`), so `ConvertJob.Run` gains a
+  third root parameter (`commonDir`) alongside the existing `dataDir`/
+  `rulesDir`.
 
 ## 7. Verification
 
