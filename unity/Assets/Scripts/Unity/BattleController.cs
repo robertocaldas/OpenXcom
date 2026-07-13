@@ -10,14 +10,9 @@ namespace OpenXcom.Unity
     /// <summary>
     /// Click a unit's GameObject to select it; click a tile to path there.
     /// Pure input + animation glue: all move legality/TU accounting lives in
-    /// OpenXcom.Core.Battle.BattleState.TryMove — this class only translates
+    /// OpenXcom.Core.Battle.BattleState.TryMove - this class only translates
     /// mouse clicks into calls on it and drains/animates the resulting
     /// BattleEvents. Makes no gameplay decisions of its own.
-    ///
-    /// NOTE: this class cannot be compiled or run in the environment this
-    /// was written in (no Unity Editor / UnityEngine assemblies available
-    /// this session). It follows documented Unity API behavior but has not
-    /// been visually verified — check it in the Editor before relying on it.
     /// </summary>
     public sealed class BattleController : MonoBehaviour
     {
@@ -28,13 +23,24 @@ namespace OpenXcom.Unity
         private BattleUnit _selected;
         private readonly Dictionary<BattleUnit, Transform> _unitTransforms = new();
 
+        /// <summary>The currently-selected unit, or null. Read by Phase 7's HUD/cursor views.</summary>
+        public BattleUnit Selected => _selected;
+
+        /// <summary>The tile under the mouse this frame, or null (cursor over
+        /// the icon bar, over a unit instead, or off the map). Recomputed
+        /// every Update() by UpdateHover - read by Phase 7's
+        /// TileCursorView/PathPreviewView.</summary>
+        public Position? HoveredTile { get; private set; }
+
+        /// <summary>The unit under the mouse this frame, or null. Recomputed
+        /// every Update() by UpdateHover.</summary>
+        public BattleUnit HoveredUnit { get; private set; }
+
         /// <summary>One unit's in-progress walk animation. A turn can move
         /// several units (e.g. the AI's hostile turn), so this is a list, not
         /// a single slot - a single-slot design silently clobbers all but the
         /// last unit's animation whenever more than one UnitMovedEvent is
-        /// drained in the same call (confirmed the hard way: this exact bug
-        /// shipped once, caught only when EndPlayerTurn's multi-unit AI turn
-        /// started actually exercising the case).</summary>
+        /// drained in the same call.</summary>
         private sealed class UnitAnimation
         {
             public Transform Transform;
@@ -55,6 +61,8 @@ namespace OpenXcom.Unity
 
         private void Update()
         {
+            UpdateHover();
+
             if (_activeAnimations.Count > 0)
             {
                 AdvanceAnimations();
@@ -67,7 +75,8 @@ namespace OpenXcom.Unity
             if (_state.IsBattleOver)
                 return; // no further input once the battle is decided
 
-            if (Input.GetKeyDown(KeyCode.Space))
+            // keyBattleEndTurn's OXCE default (Options.cpp:333) - NOT Space.
+            if (Input.GetKeyDown(KeyCode.Backspace))
             {
                 _state.EndPlayerTurn();
                 DrainAndAnimate();
@@ -83,26 +92,44 @@ namespace OpenXcom.Unity
             if (!Input.GetMouseButtonDown(0)) // left-click: select / move
                 return;
 
-            var ray = raycastCamera.ScreenPointToRay(Input.mousePosition);
-            if (!Physics.Raycast(ray, out var hit))
-                return;
-
-            var clickedUnit = FindUnitAt(hit.transform);
-            if (clickedUnit != null)
+            if (HoveredUnit != null)
             {
-                _selected = clickedUnit;
+                _selected = HoveredUnit;
                 return;
             }
 
-            if (_selected == null)
+            if (_selected == null || HoveredTile == null)
                 return;
 
-            var targetTile = TileUnderCursor(hit);
-            var result = _state.TryMove(_selected, targetTile);
+            var result = _state.TryMove(_selected, HoveredTile.Value);
             if (result.Outcome == MoveOutcome.Failed)
                 return;
 
             DrainAndAnimate();
+        }
+
+        /// <summary>
+        /// One raycast per frame from the current mouse position, resolving
+        /// HoveredUnit/HoveredTile - replaces the old per-click raycasts in
+        /// Update/HandleFireClick, so both click handling and Phase 7's
+        /// hover-driven views (tile cursor, path preview) share one hit test
+        /// instead of raycasting twice per frame.
+        /// </summary>
+        private void UpdateHover()
+        {
+            HoveredUnit = null;
+            HoveredTile = null;
+
+            if (raycastCamera == null)
+                return;
+
+            var ray = raycastCamera.ScreenPointToRay(Input.mousePosition);
+            if (!Physics.Raycast(ray, out var hit))
+                return;
+
+            HoveredUnit = FindUnitAt(hit.transform);
+            if (HoveredUnit == null)
+                HoveredTile = TileUnderCursor(hit);
         }
 
         private void HandleFireClick()
@@ -110,15 +137,10 @@ namespace OpenXcom.Unity
             if (_selected == null || _selected.RightHand == null)
                 return;
 
-            var ray = raycastCamera.ScreenPointToRay(Input.mousePosition);
-            if (!Physics.Raycast(ray, out var hit))
+            if (HoveredUnit == null || HoveredUnit == _selected)
                 return;
 
-            var target = FindUnitAt(hit.transform);
-            if (target == null || target == _selected)
-                return;
-
-            _state.TryFire(_selected, _selected.RightHand, BattleActionType.AimedShot, target);
+            _state.TryFire(_selected, _selected.RightHand, BattleActionType.AimedShot, HoveredUnit);
             DrainAndAnimate();
         }
 
@@ -133,16 +155,9 @@ namespace OpenXcom.Unity
         private Position TileUnderCursor(RaycastHit hit)
         {
             // Inverse of IsoProjection.MapToScreen; left as a direct pixel/world
-            // lookup against the hit tile's own TileRenderer name ("Tile_x_y_z"),
-            // since BattlescapeMapView already names each tile GameObject that
-            // way and this avoids re-deriving the iso inverse-projection math
-            // for this phase (no input-picking formula was ported yet — parent
-            // spec §5 names this as later work, "screen->tile picking"). Reads
-            // hit.transform directly, NOT .parent: TileRenderer's BoxCollider
-            // (Task 5/6) sits on the Tile_x_y_z GameObject itself, so a raycast
-            // hit's transform IS that tile - .parent is the Battlescape root,
-            // which has no underscores and previously crashed this parse on
-            // every click (confirmed via the phase's final whole-branch review).
+            // lookup against the hit tile's own TileRenderer name ("Tile_x_y_z").
+            // Reads hit.transform directly, NOT .parent: TileRenderer's
+            // BoxCollider sits on the Tile_x_y_z GameObject itself.
             var parts = hit.transform.name.Split('_');
             return new Position(int.Parse(parts[1]), int.Parse(parts[2]), int.Parse(parts[3]));
         }
@@ -153,10 +168,6 @@ namespace OpenXcom.Unity
             {
                 if (evt is UnitMovedEvent moved && _unitTransforms.TryGetValue(moved.Unit, out var t))
                 {
-                    // Target seeded to the unit's current position so
-                    // AdvanceAnimations' "close enough, dequeue next
-                    // waypoint" gate is trivially satisfied on the first
-                    // tick, rather than comparing against Vector3.zero.
                     _activeAnimations.Add(new UnitAnimation
                     {
                         Transform = t,
@@ -178,6 +189,8 @@ namespace OpenXcom.Unity
                 {
                     deadTransform.gameObject.SetActive(false);
                     _unitTransforms.Remove(died.Unit);
+                    if (_selected == died.Unit)
+                        _selected = null;
                 }
                 else if (evt is TurnChangedEvent turnChanged)
                 {
@@ -192,7 +205,6 @@ namespace OpenXcom.Unity
 
         private void AdvanceAnimations()
         {
-            // Iterate back-to-front so RemoveAt doesn't skip an element.
             for (int i = _activeAnimations.Count - 1; i >= 0; i--)
             {
                 var anim = _activeAnimations[i];
