@@ -24,6 +24,8 @@ namespace OpenXcom.Unity
     /// </summary>
     [RequireComponent(typeof(BattlescapeMapView))]
     [RequireComponent(typeof(BattleController))]
+    [RequireComponent(typeof(TileCursorView))]
+    [RequireComponent(typeof(PathPreviewView))]
     public sealed class BattlescapeBootstrap : MonoBehaviour
     {
         private static readonly Position SoldierAPos = new(1, 1, 0);
@@ -69,6 +71,12 @@ namespace OpenXcom.Unity
                 Faction.Hostile, "Sectoid B", SectoidBPos, sectoidAtlas);
 
             GetComponent<BattleController>().Bind(state, unitTransforms);
+
+            var cursorAtlas = AtlasLoader.Load(gameDataDir, "cursor");
+            GetComponent<TileCursorView>().Setup(GetComponent<BattleController>(), cursorAtlas);
+
+            var pathAtlas = AtlasLoader.Load(gameDataDir, "pathfinding");
+            GetComponent<PathPreviewView>().Setup(GetComponent<BattleController>(), state, pathAtlas);
         }
 
         private void Spawn(BattleState state, OpenXcom.Core.Battle.TileGrid grid,
