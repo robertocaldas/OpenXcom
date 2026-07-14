@@ -73,7 +73,7 @@ namespace OpenXcom.Unity
             GetComponent<BattleController>().Bind(state, unitTransforms);
 
             var cursorAtlas = AtlasLoader.Load(gameDataDir, "cursor");
-            GetComponent<TileCursorView>().Setup(GetComponent<BattleController>(), cursorAtlas);
+            GetComponent<TileCursorView>().Setup(GetComponent<BattleController>(), cursorAtlas, grid.Width, grid.Length);
 
             var pathAtlas = AtlasLoader.Load(gameDataDir, "pathfinding");
             GetComponent<PathPreviewView>().Setup(GetComponent<BattleController>(), state, pathAtlas);

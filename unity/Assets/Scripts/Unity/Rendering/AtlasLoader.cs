@@ -18,6 +18,12 @@ namespace OpenXcom.Unity.Rendering
             byte[] pngBytes = File.ReadAllBytes(Path.Combine(gameDataDir, $"{baseName}.png"));
             var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             texture.LoadImage(pngBytes);
+            // Texture2D defaults to Bilinear, which blurs these low-res pixel-art
+            // atlases when their sprites are scaled up; these are loaded at
+            // runtime (not Unity-imported assets), so the Editor's per-asset
+            // "Filter Mode" import setting never applies - it must be set here.
+            texture.filterMode = FilterMode.Point;
+            texture.wrapMode = TextureWrapMode.Clamp;
 
             string framesJson = File.ReadAllText(Path.Combine(gameDataDir, $"{baseName}.frames.json"));
             var parsed = JsonUtility.FromJson<AtlasFramesJson>(framesJson);

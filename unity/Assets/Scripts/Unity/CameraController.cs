@@ -1,4 +1,5 @@
 using OpenXcom.Unity.Rendering;
+using OpenXcom.Unity.UI;
 using UnityEngine;
 
 namespace OpenXcom.Unity
@@ -55,7 +56,10 @@ namespace OpenXcom.Unity
 
         private void HandleEdgeScroll()
         {
-            float viewportHeightPixels = Screen.height - IconBarHeightPixels;
+            // The icon bar's on-screen height scales with HudBootstrap's
+            // CanvasScaler.scaleFactor (HudScale) - a fixed 56px band would be
+            // wrong (too small) on any display where the HUD is upscaled.
+            float viewportHeightPixels = Screen.height - IconBarHeightPixels * HudScale.ComputeScaleFactor(Screen.height);
             float mouseYFromTop = Screen.height - Input.mousePosition.y;
             if (mouseYFromTop > viewportHeightPixels)
                 return; // mouse is over the icon bar, not the map viewport
@@ -86,27 +90,30 @@ namespace OpenXcom.Unity
             // (matches +-ScrollSpeed or +-ScrollSpeed/2); normalize to a
             // -1..1 direction then scale by the units-per-second rate.
             //
-            // [FIXED - live, this task] Negated relative to the original
-            // paper derivation. CameraScroll.EdgeScrollDirection's dx/dy are
-            // a faithful port of Camera::mouseOver's delta to _mapOffset
-            // (Camera.cpp:334-335: "_mapOffset.x += x"), and _mapOffset is
-            // *subtracted* from the raw projected position to get the final
-            // screen position's relationship to what's centered
-            // (Camera::centerOnPosition, Camera.cpp:428:
-            // "_mapOffset.x = -(screenPos.x - halfWidth)" => the raw-space
-            // point at screen center is halfWidth - _mapOffset.x, so it
-            // moves by -dx per scroll tick). This CameraController instead
-            // sets transform.position directly to the raw projected position
-            // of whatever should be centered (see CenterOnSelectedUnit
-            // below), i.e. Unity's camera position plays the role of that
-            // "raw-space center point", not of _mapOffset itself - so it
-            // must move by -dx/-dy to match, not +dx/+dy. Confirmed live via
-            // execute_script: EdgeScrollDirection returns dx=-8 when
-            // hovering the right screen edge; applying that unnegated would
-            // move the camera left (revealing content to the left) when the
-            // mouse is at the right edge, which is backwards.
+            // X: negated. The original's _mapOffset is added to every drawn
+            // point's raw screen position (Camera.cpp:496-497); moving the
+            // CAMERA to reproduce the same visible effect as increasing
+            // _mapOffset therefore requires the opposite motion - camera
+            // position and content offset are inverses of each other. This
+            // holds for both axes and needs no coordinate-convention
+            // adjustment on X, since screen-X-increases-rightward is the same
+            // direction in both SDL and Unity.
+            //
+            // Y: NOT negated, unlike X. The original's screenY is SDL's
+            // Y-DOWN convention (Camera.cpp:475-480, IsoProjection.MapToScreen
+            // is a byte-for-byte port of that same formula), but every tile/
+            // unit/cursor in this Unity port is placed via
+            // IsoProjection.WorldPosition, which negates screenY to match
+            // Unity's Y-UP world. That extra negation on the placement side
+            // cancels the "camera moves opposite to content" negation on the
+            // pan side, leaving Y unnegated here. Verified: with this sign,
+            // hovering/pressing the physical top edge of the screen pans the
+            // camera so new content enters from the top (matching every
+            // standard edge-scroll convention) - the previous version (both
+            // axes negated) did the opposite, which is the bug the user
+            // reported as "camera up/down inverted".
             float dirX = -dxTickPixels / (float)ScrollSpeed;
-            float dirY = -dyTickPixels / (float)ScrollSpeed;
+            float dirY = dyTickPixels / (float)ScrollSpeed;
             transform.position += new Vector3(dirX, dirY, 0f) * _unitsPerSecond * Time.deltaTime;
         }
 
@@ -119,9 +126,8 @@ namespace OpenXcom.Unity
                 return;
 
             var pos = _battleController.Selected.Position;
-            var (screenX, screenY) = IsoProjection.MapToScreen(pos.X, pos.Y, pos.Z);
-            transform.position = new Vector3(
-                screenX / TileRenderer.PixelsPerUnit, screenY / TileRenderer.PixelsPerUnit, transform.position.z);
+            var (worldX, worldY) = IsoProjection.WorldPosition(pos.X, pos.Y, pos.Z, TileRenderer.PixelsPerUnit);
+            transform.position = new Vector3(worldX, worldY, transform.position.z);
         }
 
         private void ClampToMapBounds()
@@ -130,15 +136,15 @@ namespace OpenXcom.Unity
                 return;
 
             var grid = mapView.Grid;
-            var (minSx, minSy) = IsoProjection.MapToScreen(0, grid.Length - 1, 0);
-            var (maxSx, maxSy) = IsoProjection.MapToScreen(grid.Width - 1, 0, 0);
-            var (topSx, topSy) = IsoProjection.MapToScreen(0, 0, 0);
-            var (botSx, botSy) = IsoProjection.MapToScreen(grid.Width - 1, grid.Length - 1, 0);
+            var (minCornerX, minCornerY) = IsoProjection.WorldPosition(0, grid.Length - 1, 0, TileRenderer.PixelsPerUnit);
+            var (maxCornerX, maxCornerY) = IsoProjection.WorldPosition(grid.Width - 1, 0, 0, TileRenderer.PixelsPerUnit);
+            var (topCornerX, topCornerY) = IsoProjection.WorldPosition(0, 0, 0, TileRenderer.PixelsPerUnit);
+            var (botCornerX, botCornerY) = IsoProjection.WorldPosition(grid.Width - 1, grid.Length - 1, 0, TileRenderer.PixelsPerUnit);
 
-            float minX = Mathf.Min(minSx, maxSx, topSx, botSx) / TileRenderer.PixelsPerUnit;
-            float maxX = Mathf.Max(minSx, maxSx, topSx, botSx) / TileRenderer.PixelsPerUnit;
-            float minY = Mathf.Min(minSy, maxSy, topSy, botSy) / TileRenderer.PixelsPerUnit;
-            float maxY = Mathf.Max(minSy, maxSy, topSy, botSy) / TileRenderer.PixelsPerUnit;
+            float minX = Mathf.Min(minCornerX, maxCornerX, topCornerX, botCornerX);
+            float maxX = Mathf.Max(minCornerX, maxCornerX, topCornerX, botCornerX);
+            float minY = Mathf.Min(minCornerY, maxCornerY, topCornerY, botCornerY);
+            float maxY = Mathf.Max(minCornerY, maxCornerY, topCornerY, botCornerY);
 
             var pos = transform.position;
             pos.x = Mathf.Clamp(pos.x, minX, maxX);

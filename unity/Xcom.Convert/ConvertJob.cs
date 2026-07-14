@@ -100,11 +100,19 @@ namespace Xcom.Convert
             written.Add("cursor.png");
             written.Add("cursor.frames.json");
 
-            // 3d. ICONS.PCK: icon bar background, single 320x56 frame, no .TAB.
-            var iconsFrames = PckDecoder.Load(
-                File.ReadAllBytes(Path.Combine(dataDir, "UFOGRAPH", "ICONS.PCK")),
-                System.Array.Empty<byte>(), 320, 56);
-            var iconsAtlas = AtlasWriter.Build(iconsFrames, pal);
+            // 3d. ICONS.PCK: icon bar background. Despite the ".PCK" extension
+            // this is NOT a sprite-sheet PCK+TAB file - the original loads it
+            // via Surface::loadSpk (a different 16-bit RLE scheme, SpkDecoder)
+            // into a full 320x200 screen-sized canvas (Mod.cpp:5830), of which
+            // only the bottom 56 rows are the icon bar itself (screenHeight -
+            // iconsHeight = 200 - 56 = 144, the same split BattlescapeState
+            // uses for visibleMapHeight). Decoding this as a 320x56 PckDecoder
+            // frame (this project's original approach) fed the wrong RLE
+            // scheme entirely and silently produced an all-transparent image.
+            var iconsFull = SpkDecoder.Load(
+                File.ReadAllBytes(Path.Combine(dataDir, "UFOGRAPH", "ICONS.PCK")), 320, 200);
+            var iconsBar = SpkDecoder.Crop(iconsFull, x: 0, y: 144, width: 320, height: 56);
+            var iconsAtlas = AtlasWriter.Build(new List<IndexedFrame> { iconsBar }, pal);
             AtlasWriter.Save(iconsAtlas,
                 Path.Combine(outDir, "icons.png"),
                 Path.Combine(outDir, "icons.frames.json"));

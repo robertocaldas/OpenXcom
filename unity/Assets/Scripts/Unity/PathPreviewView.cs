@@ -66,8 +66,8 @@ namespace OpenXcom.Unity
                 renderer.sprite = Sprite.Create(_pathAtlas.texture, _pathAtlas.frameRects[dirIndex], new Vector2(0.5f, 0f), TileRenderer.PixelsPerUnit);
                 renderer.color = affordability[i] == PathPreview.Affordability.Affordable ? Affordable : Unaffordable;
 
-                var (screenX, screenY) = IsoProjection.MapToScreen(step.Position.X, step.Position.Y, step.Position.Z);
-                arrowGo.transform.localPosition = new Vector3(screenX / TileRenderer.PixelsPerUnit, screenY / TileRenderer.PixelsPerUnit, 0f);
+                var (worldX, worldY) = IsoProjection.WorldPosition(step.Position.X, step.Position.Y, step.Position.Z, TileRenderer.PixelsPerUnit);
+                arrowGo.transform.localPosition = new Vector3(worldX, worldY, 0f);
 
                 _arrows.Add(renderer);
             }

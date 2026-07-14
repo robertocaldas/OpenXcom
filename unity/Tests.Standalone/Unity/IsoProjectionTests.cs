@@ -27,6 +27,26 @@ namespace OpenXcom.Core.Tests.Unity
         }
 
         [Fact]
+        public void WorldPosition_NegatesScreenY_ForUnitYUpWorld()
+        {
+            // MapToScreen's Y is SDL's Y-DOWN convention; Unity's world Y is
+            // Y-UP, so WorldPosition must negate it (see IsoProjection.cs's
+            // doc comment) - a tile further "south" (larger x+y, larger raw
+            // screenY) must end up at a SMALLER Unity world Y, not larger.
+            var (worldX, worldY) = IsoProjection.WorldPosition(3, 1, 0, pixelsPerUnit: 32f);
+            Assert.Equal((3 - 1) * 16 / 32f, worldX);
+            Assert.Equal(-(3 + 1) * 8 / 32f, worldY);
+        }
+
+        [Fact]
+        public void WorldPosition_SouthTileEndsUpBelowNorthTile()
+        {
+            var (_, northY) = IsoProjection.WorldPosition(0, 0, 0, pixelsPerUnit: 32f);
+            var (_, southY) = IsoProjection.WorldPosition(5, 5, 0, pixelsPerUnit: 32f);
+            Assert.True(southY < northY);
+        }
+
+        [Fact]
         public void SortingOrder_HigherZAlwaysOutranksAnyLowerZTile()
         {
             int lowZLastTile = IsoProjection.SortingOrder(9, 9, 0, 10, 10, IsoProjection.PartRank.Object);

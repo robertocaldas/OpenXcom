@@ -32,6 +32,12 @@ namespace OpenXcom.Unity.Rendering
 
             _collider = gameObject.AddComponent<BoxCollider>();
             _collider.size = new Vector3(0.6f, 1f, 0.1f);
+            // Same bottom-anchor-vs-centered-collider mismatch as TileRenderer:
+            // the unit sprite (pivot 0.5,0) only extends upward from this
+            // transform's local origin, so the collider must be shifted up by
+            // half its height to actually overlap the visible body, not just the
+            // ground beneath the unit's feet.
+            _collider.center = new Vector3(0f, 0.5f, 0f);
         }
 
         private SpriteRenderer CreateChild(string childName)
@@ -44,8 +50,9 @@ namespace OpenXcom.Unity.Rendering
         public void Setup(int x, int y, int z, int mapWidth, int mapLength,
             Sprite legsSprite, Sprite rightArmSprite, Sprite torsoSprite, Sprite leftArmSprite)
         {
-            var (screenX, screenY) = IsoProjection.MapToScreen(x, y, z);
-            transform.localPosition = new Vector3(screenX / TileRenderer.PixelsPerUnit, screenY / TileRenderer.PixelsPerUnit, 0f);
+            var (worldX, worldY) = IsoProjection.WorldPosition(x, y, z, TileRenderer.PixelsPerUnit);
+            float depth = IsoProjection.UnitRaycastDepth(x, y, z, mapWidth, mapLength);
+            transform.localPosition = new Vector3(worldX, worldY, depth);
 
             _legs.sprite = legsSprite;
             _legs.sortingOrder = IsoProjection.UnitSortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.UnitPartRank.Legs);

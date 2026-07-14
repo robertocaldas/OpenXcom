@@ -105,16 +105,24 @@ namespace OpenXcom.Unity
 
             if (HoveredUnit != null)
             {
-                _selected = HoveredUnit;
+                // Only the player's own units are selectable - nothing in
+                // TryMove/TryFire itself checks faction or whose turn it is, so
+                // without this gate a left-click on a visible Hostile unit hands
+                // the player full move/fire control over it.
+                if (HoveredUnit.Faction == Faction.Player)
+                    _selected = HoveredUnit;
                 return;
             }
 
-            if (_selected == null || HoveredTile == null)
+            if (_selected == null || HoveredTile == null || _state.CurrentTurn != Faction.Player)
                 return;
 
             var result = _state.TryMove(_selected, HoveredTile.Value);
             if (result.Outcome == MoveOutcome.Failed)
+            {
+                Debug.Log($"{_selected.Name} can't move there (out of TU or no path)");
                 return;
+            }
 
             DrainAndAnimate();
         }
@@ -143,19 +151,34 @@ namespace OpenXcom.Unity
                 return;
 
             HoveredUnit = FindUnitAt(hit.transform);
-            if (HoveredUnit == null)
-                HoveredTile = TileUnderCursor(hit);
+            // HoveredTile always resolves - even when the hit was a unit's
+            // collider, not a "Tile_x_y_z" one - since the tile cursor must show
+            // on an occupied tile too (a unit's own Position IS its tile).
+            // Previously HoveredTile stayed null whenever HoveredUnit was set,
+            // which made the tile cursor vanish entirely while hovering a unit.
+            HoveredTile = HoveredUnit != null ? HoveredUnit.Position : TileUnderCursor(hit);
         }
 
         private void HandleFireClick()
         {
-            if (_selected == null || _selected.RightHand == null)
+            if (_selected == null || _selected.RightHand == null || _state.CurrentTurn != Faction.Player)
                 return;
 
             if (HoveredUnit == null || HoveredUnit == _selected)
                 return;
 
-            _state.TryFire(_selected, _selected.RightHand, BattleActionType.AimedShot, HoveredUnit);
+            var result = _state.TryFire(_selected, _selected.RightHand, BattleActionType.AimedShot, HoveredUnit);
+            if (result.Outcome != FireOutcome.Fired)
+            {
+                // Previously silent: an aimed shot costs a large chunk of TU
+                // (TuAimed% of the unit's TimeUnits stat) and there's no
+                // ammo/reload modeled yet, so InsufficientTu is common and,
+                // without this, looked identical to "the game stopped
+                // responding to right-click" rather than "out of TU."
+                Debug.Log($"{_selected.Name} can't fire: {result.Outcome}");
+                return;
+            }
+
             DrainAndAnimate();
         }
 
@@ -167,14 +190,22 @@ namespace OpenXcom.Unity
             return null;
         }
 
-        private Position TileUnderCursor(RaycastHit hit)
+        private Position? TileUnderCursor(RaycastHit hit)
         {
             // Inverse of IsoProjection.MapToScreen; left as a direct pixel/world
             // lookup against the hit tile's own TileRenderer name ("Tile_x_y_z").
             // Reads hit.transform directly, NOT .parent: TileRenderer's
-            // BoxCollider sits on the Tile_x_y_z GameObject itself.
+            // BoxCollider sits on the Tile_x_y_z GameObject itself. Returns null
+            // (not a throw) for any other collider name - observed live when a
+            // raycast hit something that wasn't a registered unit or a
+            // "Tile_x_y_z"-named collider, which crashed Update() every frame.
             var parts = hit.transform.name.Split('_');
-            return new Position(int.Parse(parts[1]), int.Parse(parts[2]), int.Parse(parts[3]));
+            if (parts.Length != 4 || parts[0] != "Tile"
+                || !int.TryParse(parts[1], out int x)
+                || !int.TryParse(parts[2], out int y)
+                || !int.TryParse(parts[3], out int z))
+                return null;
+            return new Position(x, y, z);
         }
 
         private void DrainAndAnimate()
@@ -233,8 +264,19 @@ namespace OpenXcom.Unity
                 if (Vector3.Distance(anim.Transform.localPosition, anim.Target) < 0.01f)
                 {
                     var next = anim.Queue.Dequeue();
-                    var (sx, sy) = IsoProjection.MapToScreen(next.X, next.Y, next.Z);
-                    anim.Target = new Vector3(sx / TileRenderer.PixelsPerUnit, sy / TileRenderer.PixelsPerUnit, 0f);
+                    var (worldX, worldY) = IsoProjection.WorldPosition(next.X, next.Y, next.Z, TileRenderer.PixelsPerUnit);
+                    // Z must track UnitRaycastDepth, not a flat 0 - every tile's
+                    // MeshCollider/BoxCollider sits at a small negative
+                    // (closer-to-camera) Z via IsoProjection.RaycastDepth, and a
+                    // moving unit needs to stay closer than the tile beneath it
+                    // (its own UnitRaycastDepth) or the raycast that resolves
+                    // clicks/hover starts hitting the tile instead of the unit
+                    // standing on it once it settles at Z=0. This made any unit
+                    // that had ever moved - including every Hostile unit after
+                    // its first AI turn, regardless of what the player did -
+                    // permanently unable to be right-click-targeted.
+                    float depth = IsoProjection.UnitRaycastDepth(next.X, next.Y, next.Z, _state.Grid.Width, _state.Grid.Length);
+                    anim.Target = new Vector3(worldX, worldY, depth);
                 }
 
                 anim.Transform.localPosition = Vector3.MoveTowards(

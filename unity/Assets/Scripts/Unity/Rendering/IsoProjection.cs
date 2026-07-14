@@ -50,6 +50,25 @@ namespace OpenXcom.Unity.Rendering
         }
 
         /// <summary>
+        /// A tile/unit's anchor position in Unity world units (Y-up). MapToScreen
+        /// returns screenY in the original engine's SDL convention (Y-DOWN: bigger
+        /// screenY = further down the physical screen). Unity's world Y is Y-UP,
+        /// so screenY must be negated when adopted as a world coordinate - every
+        /// MonoBehaviour that positions a tile/unit/cursor/arrow at a map
+        /// coordinate must go through this helper (not divide MapToScreen's raw Y
+        /// by pixelsPerUnit directly), or the map renders as a vertical mirror of
+        /// the original layout. Still self-consistent for raycasting/click-to-tile
+        /// if every consumer shared the same missing negation, but pre-baked
+        /// directional art (path-preview arrows) encodes a specific on-screen
+        /// direction that only reads correctly in the original's orientation.
+        /// </summary>
+        public static (float WorldX, float WorldY) WorldPosition(int x, int y, int z, float pixelsPerUnit)
+        {
+            var (screenX, screenY) = MapToScreen(x, y, z);
+            return (screenX / pixelsPerUnit, -screenY / pixelsPerUnit);
+        }
+
+        /// <summary>
         /// Monotonic back-to-front sorting order for one tile-part, reproducing
         /// the C++ draw loop's Z-outer, Y-middle, X-inner nesting plus the
         /// floor/west/north/object per-tile order (Map.cpp:900-907, 939-1318).
@@ -106,5 +125,29 @@ namespace OpenXcom.Unity.Rendering
             long unitBand = (long)mapWidth * mapLength * 5;
             return (int)(unitBand + tileIndex * 4 + (int)part);
         }
+
+        private const float RaycastDepthStep = 0.001f;
+
+        /// <summary>
+        /// Small world-Z offset matching a tile's SortingOrder (camera sits at
+        /// Z=-10 looking toward +Z, so "closer to camera" = more negative Z).
+        /// Every tile/unit collider is otherwise placed at local Z=0 with the
+        /// same tiny size.z=0.1 - sortingOrder governs 2D DRAW order but has no
+        /// effect on Physics.Raycast, so without a matching physical Z offset,
+        /// a raycast at any screen point whose XY falls inside two overlapping
+        /// tile/unit colliders resolves via Unity's unspecified internal tie-
+        /// break, not by what's actually drawn on top. This produced both the
+        /// "clicks select the wrong unit" and "tile cursor lands on the wrong
+        /// tile" bugs.
+        /// </summary>
+        public static float RaycastDepth(int x, int y, int z, int mapWidth, int mapLength) =>
+            -RaycastDepthStep * SortingOrder(x, y, z, mapWidth, mapLength, PartRank.Object);
+
+        /// <summary>Unit equivalent of RaycastDepth - always closer to the camera than
+        /// any tile's RaycastDepth (UnitSortingOrder always exceeds any tile's
+        /// SortingOrder in the same grid), so a raycast prefers the unit standing
+        /// on a tile over the tile itself.</summary>
+        public static float UnitRaycastDepth(int x, int y, int z, int mapWidth, int mapLength) =>
+            -RaycastDepthStep * UnitSortingOrder(x, y, z, mapWidth, mapLength, UnitPartRank.Torso);
     }
 }

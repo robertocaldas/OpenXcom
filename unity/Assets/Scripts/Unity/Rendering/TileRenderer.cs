@@ -26,7 +26,6 @@ namespace OpenXcom.Unity.Rendering
         private SpriteRenderer _westWall;
         private SpriteRenderer _northWall;
         private SpriteRenderer _object;
-        private BoxCollider _collider;
 
         private void Awake()
         {
@@ -35,8 +34,42 @@ namespace OpenXcom.Unity.Rendering
             _northWall = CreateChild("NorthWall");
             _object = CreateChild("Object");
 
-            _collider = gameObject.AddComponent<BoxCollider>();
-            _collider.size = new Vector3(1f, 0.5f, 0.1f);
+            // The flat floor diamond's true footprint (32x16px = 1x0.5 units)
+            // is a rhombus, not a rectangle - its two diagonals differ in
+            // length (1 vs 0.5), so no axis-aligned (or rotated) BoxCollider
+            // can represent it exactly. A box sized to the diamond's full
+            // bounding box overlaps up to half its area into every diagonal
+            // neighbor's identical box (misattributing clicks well inside what
+            // looks like the correct tile); a box shrunk to the diamond's
+            // inscribed rectangle avoids overlap but leaves gaps near every
+            // edge where no collider exists at all (hover/click silently hits
+            // nothing there). A 2-triangle mesh matching the diamond exactly
+            // is gapless AND non-overlapping between neighbors.
+            var collider = gameObject.AddComponent<MeshCollider>();
+            collider.sharedMesh = BuildDiamondMesh();
+        }
+
+        private static Mesh BuildDiamondMesh()
+        {
+            // Floor sprite is bottom-anchored (pivot 0.5,0), so its diamond's
+            // bottom point sits at this transform's local origin, matching
+            // TileRenderer.Setup's world-position placement.
+            var mesh = new Mesh
+            {
+                vertices = new[]
+                {
+                    new Vector3(0f, 0f, 0f),       // bottom
+                    new Vector3(0.5f, 0.25f, 0f),  // right
+                    new Vector3(0f, 0.5f, 0f),     // top
+                    new Vector3(-0.5f, 0.25f, 0f), // left
+                },
+                // Both windings per triangle so the raycast (traveling +Z from
+                // the camera at Z=-10) hits regardless of face-culling direction.
+                triangles = new[] { 0, 1, 2, 0, 2, 1, 0, 2, 3, 0, 3, 2 },
+            };
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         private SpriteRenderer CreateChild(string childName)
@@ -56,11 +89,15 @@ namespace OpenXcom.Unity.Rendering
             Sprite floorSprite, int floorYOffsetPixels,
             Sprite westWallSprite, Sprite northWallSprite, Sprite objectSprite)
         {
-            var (screenX, screenY) = IsoProjection.MapToScreen(x, y, z);
-            transform.localPosition = new Vector3(screenX / PixelsPerUnit, screenY / PixelsPerUnit, 0f);
+            var (worldX, worldY) = IsoProjection.WorldPosition(x, y, z, PixelsPerUnit);
+            float depth = IsoProjection.RaycastDepth(x, y, z, mapWidth, mapLength);
+            transform.localPosition = new Vector3(worldX, worldY, depth);
 
             _floor.sprite = floorSprite;
-            _floor.transform.localPosition = new Vector3(0f, -floorYOffsetPixels / PixelsPerUnit, 0f);
+            // Original: screenPosition.y - yOffset (SDL Y-down: subtracting moves
+            // the sprite UP the physical screen). In Unity's now-correctly-oriented
+            // Y-up world, "up" is +Y, so the offset's sign flips to +.
+            _floor.transform.localPosition = new Vector3(0f, floorYOffsetPixels / PixelsPerUnit, 0f);
             _floor.sortingOrder = IsoProjection.SortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.Floor);
 
             _westWall.sprite = westWallSprite;
