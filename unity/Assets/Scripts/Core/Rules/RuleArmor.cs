@@ -4,7 +4,7 @@ namespace OpenXcom.Core.Rules
     /// Immutable armor template. Directional armor values are subtracted from
     /// incoming damage on the corresponding hit side. Loftemps is the index
     /// into LOFTEMPS.DAT's voxel bitmask templates used for voxel-level hit
-    /// detection (RuleArmor::getLoftemps, src/Mod/Armor.h:587) - single value
+    /// detection (BattleUnit::getLoftemps(int entry), src/Savegame/BattleUnit.h:587) - single value
     /// since this rewrite has no big (2x2) units.
     /// Mirrors OXCE <c>Armor</c> (src/Mod/Armor.h), slice-1 subset.
     /// </summary>

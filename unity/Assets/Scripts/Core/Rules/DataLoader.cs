@@ -105,6 +105,7 @@ namespace OpenXcom.Core.Rules
             return result;
         }
 
+        /// <summary>Loads the flat LOFTEMPS.DAT voxel bitmask table. Port of MapDataSet::loadLOFTEMPS (src/Mod/MapDataSet.cpp:272).</summary>
         public static ushort[] LoadLoftemps(string gameDataDir)
         {
             string path = Path.Combine(gameDataDir, "loftemps.json");
