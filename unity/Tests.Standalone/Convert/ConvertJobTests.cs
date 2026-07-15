@@ -32,6 +32,7 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Contains(written, p => p == "units-SECTOID.frames.json");
             Assert.Contains(written, p => p == "units.json");
             Assert.Contains(written, p => p == "armors.json");
+            Assert.Contains(written, p => p == "loftemps.json");
             Assert.Contains(written, p => p == "items.json");
             Assert.Contains(written, p => p == "cursor.png");
             Assert.Contains(written, p => p == "cursor.frames.json");
@@ -41,11 +42,11 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Contains(written, p => p == "pathfinding.frames.json");
             Assert.True(File.Exists(Path.Combine(outDir, "manifest.json")));
 
-            Assert.Equal(26, written.Count);
+            Assert.Equal(27, written.Count);
             var manifestJson = File.ReadAllText(Path.Combine(outDir, "manifest.json"));
             var manifest = Newtonsoft.Json.Linq.JObject.Parse(manifestJson);
             var files = manifest["files"].Select(t => t.ToString()).ToList();
-            Assert.Equal(26, files.Count);
+            Assert.Equal(27, files.Count);
 
             // icons.png: single 320x56 frame (no companion .TAB on disk).
             var iconsFramesJson = File.ReadAllText(Path.Combine(outDir, "icons.frames.json"));
@@ -76,12 +77,21 @@ namespace OpenXcom.Core.Tests.Convert
             var soldierUnit = units.Single(u => u["Id"].ToString() == "STR_SOLDIER");
             Assert.Equal(50, (int)soldierUnit["Stats"]["TimeUnits"]);
 
-            // armors.json: Sectoid armor only, this slice.
+            // armors.json: soldier's real STR_NONE_UC armor + Sectoid armor, both with Loftemps.
             var armorsJson = File.ReadAllText(Path.Combine(outDir, "armors.json"));
             var armors = Newtonsoft.Json.Linq.JArray.Parse(armorsJson);
-            Assert.Single(armors);
-            Assert.Equal("SECTOID_ARMOR0", armors[0]["Id"].ToString());
-            Assert.Equal(4, (int)armors[0]["Front"]);
+            Assert.Equal(2, armors.Count);
+            var soldierArmorJson = armors.Single(a => a["Id"].ToString() == "STR_NONE_UC");
+            Assert.Equal(12, (int)soldierArmorJson["Front"]);
+            Assert.Equal(3, (int)soldierArmorJson["Loftemps"]);
+            var sectoidArmorJson = armors.Single(a => a["Id"].ToString() == "SECTOID_ARMOR0");
+            Assert.Equal(4, (int)sectoidArmorJson["Front"]);
+            Assert.Equal(2, (int)sectoidArmorJson["Loftemps"]);
+
+            // loftemps.json: flat ushort array, 112 templates x 16 rows.
+            var loftempsJson = File.ReadAllText(Path.Combine(outDir, "loftemps.json"));
+            var loftemps = Newtonsoft.Json.Linq.JArray.Parse(loftempsJson);
+            Assert.Equal(112 * 16, loftemps.Count);
 
             // items.json: rifle + plasma pistol, power/damageType from the clip.
             var itemsJson = File.ReadAllText(Path.Combine(outDir, "items.json"));

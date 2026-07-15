@@ -139,10 +139,11 @@ namespace Xcom.Convert
                 JsonConvert.SerializeObject(block, Formatting.Indented));
             written.Add("mapblock-CULTA00.json");
 
-            // 5. Rules: XCom soldier + Sectoid stats, Sectoid armor, rifle + plasma pistol.
+            // 5. Rules: XCom soldier + Sectoid stats, soldier + Sectoid armor, rifle + plasma pistol.
             var soldier = RuleYamlDecoder.LoadSoldierUnit(Path.Combine(rulesDir, "soldiers.rul"), "STR_SOLDIER");
             var sectoidUnit = RuleYamlDecoder.LoadAlienUnit(Path.Combine(rulesDir, "units.rul"), "STR_SECTOID_SOLDIER");
             var sectoidArmor = RuleYamlDecoder.LoadArmor(Path.Combine(rulesDir, "armors.rul"), "SECTOID_ARMOR0");
+            var soldierArmor = RuleYamlDecoder.LoadArmor(Path.Combine(rulesDir, "armors.rul"), "STR_NONE_UC");
             var rifle = RuleYamlDecoder.LoadWeapon(Path.Combine(rulesDir, "items.rul"), "STR_RIFLE", "STR_RIFLE_CLIP");
             var plasmaPistol = RuleYamlDecoder.LoadWeapon(Path.Combine(rulesDir, "items.rul"), "STR_PLASMA_PISTOL", "STR_PLASMA_PISTOL_CLIP");
 
@@ -151,12 +152,18 @@ namespace Xcom.Convert
             written.Add("units.json");
 
             File.WriteAllText(Path.Combine(outDir, "armors.json"),
-                JsonConvert.SerializeObject(new[] { sectoidArmor }, Formatting.Indented));
+                JsonConvert.SerializeObject(new[] { soldierArmor, sectoidArmor }, Formatting.Indented));
             written.Add("armors.json");
 
             File.WriteAllText(Path.Combine(outDir, "items.json"),
                 JsonConvert.SerializeObject(new[] { rifle, plasmaPistol }, Formatting.Indented));
             written.Add("items.json");
+
+            // 6. LOFTEMPS.DAT -> loftemps.json (voxel hit-detection templates, shared across all terrain/units).
+            var loftemps = LoftempsDecoder.Load(File.ReadAllBytes(Path.Combine(dataDir, "GEODATA", "LOFTEMPS.DAT")));
+            File.WriteAllText(Path.Combine(outDir, "loftemps.json"),
+                JsonConvert.SerializeObject(loftemps, Formatting.Indented));
+            written.Add("loftemps.json");
 
             written.Add("manifest.json");
             File.WriteAllText(Path.Combine(outDir, "manifest.json"),
