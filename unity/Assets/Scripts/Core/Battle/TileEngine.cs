@@ -130,6 +130,79 @@ namespace OpenXcom.Core.Battle
             return VoxelHit.Empty(voxel);
         }
 
+        /// <summary>
+        /// Traces a 3D line through voxel space from origin to target,
+        /// stopping at the first non-empty VoxelCheck result (or reaching
+        /// target unobstructed). Standard 3D DDA/Bresenham with the same
+        /// "drift" side-step checking the original uses so a shallow
+        /// diagonal doesn't skip past a thin wall corner. Port of
+        /// calculateLineHelper + calculateLineVoxel
+        /// (src/Battlescape/TileEngine.cpp:60-160,4360-4408), collapsed into
+        /// one voxel-specific method since this rewrite has no second caller
+        /// needing the C++ template's generic callback shape (tile-level LOS
+        /// already has its own separate, simpler WalkLine).
+        /// </summary>
+        public static VoxelHit CalculateLine(TileGrid grid, ushort[] loftData, Position origin, Position target, BattleUnit excludeUnit)
+        {
+            int x0 = origin.X, x1 = target.X;
+            int y0 = origin.Y, y1 = target.Y;
+            int z0 = origin.Z, z1 = target.Z;
+
+            bool swapXy = Math.Abs(y1 - y0) > Math.Abs(x1 - x0);
+            if (swapXy) { (x0, y0) = (y0, x0); (x1, y1) = (y1, x1); }
+
+            bool swapXz = Math.Abs(z1 - z0) > Math.Abs(x1 - x0);
+            if (swapXz) { (x0, z0) = (z0, x0); (x1, z1) = (z1, x1); }
+
+            int deltaX = Math.Abs(x1 - x0);
+            int deltaY = Math.Abs(y1 - y0);
+            int deltaZ = Math.Abs(z1 - z0);
+
+            int driftXy = deltaX / 2;
+            int driftXz = deltaX / 2;
+
+            int stepX = x0 > x1 ? -1 : 1;
+            int stepY = y0 > y1 ? -1 : 1;
+            int stepZ = z0 > z1 ? -1 : 1;
+
+            int y = y0, z = z0;
+
+            VoxelHit CheckPoint(int cx, int cy, int cz)
+            {
+                int px = cx, py = cy, pz = cz;
+                if (swapXz) (px, pz) = (pz, px);
+                if (swapXy) (px, py) = (py, px);
+                return VoxelCheck(grid, loftData, new Position(px, py, pz), excludeUnit);
+            }
+
+            for (int x = x0; ; x += stepX)
+            {
+                var hit = CheckPoint(x, y, z);
+                if (hit.IsHit) return hit;
+                if (x == x1) break;
+
+                driftXy -= deltaY;
+                driftXz -= deltaZ;
+
+                if (driftXy < 0)
+                {
+                    y += stepY;
+                    driftXy += deltaX;
+                    var drift = CheckPoint(x, y, z);
+                    if (drift.IsHit) return drift;
+                }
+                if (driftXz < 0)
+                {
+                    z += stepZ;
+                    driftXz += deltaX;
+                    var drift = CheckPoint(x, y, z);
+                    if (drift.IsHit) return drift;
+                }
+            }
+
+            return VoxelHit.Empty(target);
+        }
+
         /// <summary>Standard integer Bresenham line walk between two tile positions (z held constant at `from.Z`).</summary>
         private static IEnumerable<Position> WalkLine(Position from, Position to)
         {

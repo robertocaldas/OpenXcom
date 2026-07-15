@@ -219,5 +219,95 @@ namespace OpenXcom.Core.Tests
 
             Assert.Equal(VoxelType.Empty, hit.Type);
         }
+
+        [Fact]
+        public void CalculateLine_ClearPathReachesExactTargetVoxel()
+        {
+            var grid = new TileGrid(3, 3, 1);
+            var origin = new Position(8, 8, 10);
+            var target = new Position(40, 8, 10);
+
+            var hit = TileEngine.CalculateLine(grid, System.Array.Empty<ushort>(), origin, target, excludeUnit: null);
+
+            Assert.Equal(VoxelType.Empty, hit.Type);
+            Assert.Equal(target, hit.Voxel);
+        }
+
+        [Fact]
+        public void CalculateLine_SolidWallOnThePathStopsBeforeTheTarget()
+        {
+            var grid = new TileGrid(3, 3, 1);
+            grid.At(1, 0, 0).Object = SolidPart(); // tile x=1 -> voxel X range [16,32)
+
+            var origin = new Position(8, 8, 10);
+            var target = new Position(40, 8, 10);
+
+            var hit = TileEngine.CalculateLine(grid, SolidLoftData(), origin, target, excludeUnit: null);
+
+            Assert.Equal(VoxelType.Object, hit.Type);
+            Assert.InRange(hit.Voxel.X, 16, 31);
+        }
+
+        [Fact]
+        public void CalculateLine_UnitStandingBehindASolidWallIsNotReached()
+        {
+            var grid = new TileGrid(3, 3, 1);
+            grid.At(1, 0, 0).Object = SolidPart(); // blocks tile x=1
+
+            var armor = new RuleArmor("A", 0, 0, 0, 0, loftemps: 1);
+            var defender = new BattleUnit(new RuleUnit("STR_TEST", UnitStats.Rookie, armor, standHeight: 22, kneelHeight: 14), Faction.Hostile)
+            {
+                Position = new Position(2, 0, 0),
+            };
+            grid.At(2, 0, 0).Occupant = defender;
+
+            var origin = new Position(8, 8, 10);
+            var target = new Position(new Position(2, 0, 0).X * 16 + 8, 8, 10); // aimed at the far unit's tile center
+
+            var hit = TileEngine.CalculateLine(grid, SolidLoftData(), origin, target, excludeUnit: null);
+
+            Assert.Equal(VoxelType.Object, hit.Type); // stops at the wall, never reaches the unit
+        }
+
+        [Fact]
+        public void CalculateLine_UnobstructedShotHitsTheStandingUnit()
+        {
+            var grid = new TileGrid(3, 3, 1);
+            var armor = new RuleArmor("A", 0, 0, 0, 0, loftemps: 1);
+            var defender = new BattleUnit(new RuleUnit("STR_TEST", UnitStats.Rookie, armor, standHeight: 22, kneelHeight: 14), Faction.Hostile)
+            {
+                Position = new Position(2, 0, 0),
+            };
+            grid.At(2, 0, 0).Occupant = defender;
+
+            var origin = new Position(8, 8, 10);
+            var target = new Position(2 * 16 + 8, 8, 10);
+
+            var hit = TileEngine.CalculateLine(grid, SolidLoftData(), origin, target, excludeUnit: null);
+
+            Assert.Equal(VoxelType.Unit, hit.Type);
+            Assert.Same(defender, hit.Unit);
+        }
+
+        [Fact]
+        public void CalculateLine_FortyFiveDegreeDiagonalStopsAtASolidTileOnItsPath()
+        {
+            // A perfect 45-degree line (equal X/Y delta) exercises the drift
+            // side-step branches every single step (driftXy/driftXz underflow on
+            // every iteration when deltaX == deltaY), unlike an axis-aligned line
+            // which never triggers them - this is the non-trivial diagonal case
+            // the Phase 8 design spec's testing strategy calls out explicitly.
+            var grid = new TileGrid(3, 3, 1);
+            grid.At(1, 1, 0).Object = SolidPart();
+
+            var origin = new Position(8, 8, 10);   // tile (0,0)
+            var target = new Position(40, 40, 10); // tile (2,2), a 45-degree diagonal
+
+            var hit = TileEngine.CalculateLine(grid, SolidLoftData(), origin, target, excludeUnit: null);
+
+            Assert.Equal(VoxelType.Object, hit.Type);
+            Assert.InRange(hit.Voxel.X, 16, 31);
+            Assert.InRange(hit.Voxel.Y, 16, 31);
+        }
     }
 }
