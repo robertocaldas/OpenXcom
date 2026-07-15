@@ -23,6 +23,9 @@ namespace Xcom.Convert.Decoders
         public string Id;
         public ConvertedStats Stats;
         public string ArmorId; // null when this unit's armor isn't converted this slice
+        public int StandHeight;
+        public int KneelHeight;
+        public int FloatHeight;
     }
 
     public sealed class ConvertedArmor
@@ -32,6 +35,7 @@ namespace Xcom.Convert.Decoders
         public int Side;
         public int Rear;
         public int Under;
+        public int Loftemps;
     }
 
     public sealed class ConvertedItem
@@ -67,7 +71,11 @@ namespace Xcom.Convert.Decoders
             var file = Deserializer.Deserialize<RawUnitsFile>(File.ReadAllText(unitsRulPath));
             var raw = file.Units.Find(u => u.Type == typeId)
                 ?? throw new InvalidDataException($"{typeId} not found in {unitsRulPath}");
-            return new ConvertedUnit { Id = raw.Type, Stats = ToStats(raw.Stats), ArmorId = raw.Armor };
+            return new ConvertedUnit
+            {
+                Id = raw.Type, Stats = ToStats(raw.Stats), ArmorId = raw.Armor,
+                StandHeight = raw.StandHeight, KneelHeight = raw.KneelHeight, FloatHeight = raw.FloatHeight,
+            };
         }
 
         public static ConvertedUnit LoadSoldierUnit(string soldiersRulPath, string typeId)
@@ -75,7 +83,11 @@ namespace Xcom.Convert.Decoders
             var file = Deserializer.Deserialize<RawSoldiersFile>(File.ReadAllText(soldiersRulPath));
             var raw = file.Soldiers.Find(s => s.Type == typeId)
                 ?? throw new InvalidDataException($"{typeId} not found in {soldiersRulPath}");
-            return new ConvertedUnit { Id = raw.Type, Stats = ToStats(raw.MinStats), ArmorId = null };
+            return new ConvertedUnit
+            {
+                Id = raw.Type, Stats = ToStats(raw.MinStats), ArmorId = null,
+                StandHeight = raw.StandHeight, KneelHeight = raw.KneelHeight, FloatHeight = raw.FloatHeight,
+            };
         }
 
         public static ConvertedArmor LoadArmor(string armorsRulPath, string typeId)
@@ -87,6 +99,7 @@ namespace Xcom.Convert.Decoders
             {
                 Id = raw.Type, Front = raw.FrontArmor, Side = raw.SideArmor,
                 Rear = raw.RearArmor, Under = raw.UnderArmor,
+                Loftemps = raw.LoftempsSet.Count > 0 ? raw.LoftempsSet[0] : 0,
             };
         }
 
@@ -139,6 +152,9 @@ namespace Xcom.Convert.Decoders
             public string Type { get; set; } = "";
             public RawStats Stats { get; set; } = new();
             public string Armor { get; set; } = "";
+            public int StandHeight { get; set; }
+            public int KneelHeight { get; set; }
+            public int FloatHeight { get; set; }
         }
 
         private sealed class RawUnitsFile
@@ -150,6 +166,9 @@ namespace Xcom.Convert.Decoders
         {
             public string Type { get; set; } = "";
             public RawStats MinStats { get; set; } = new();
+            public int StandHeight { get; set; }
+            public int KneelHeight { get; set; }
+            public int FloatHeight { get; set; }
         }
 
         private sealed class RawSoldiersFile
@@ -164,6 +183,7 @@ namespace Xcom.Convert.Decoders
             public int SideArmor { get; set; }
             public int RearArmor { get; set; }
             public int UnderArmor { get; set; }
+            public List<int> LoftempsSet { get; set; } = new();
         }
 
         private sealed class RawArmorsFile

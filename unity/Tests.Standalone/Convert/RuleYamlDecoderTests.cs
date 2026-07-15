@@ -25,6 +25,9 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Equal(30, unit.Stats.Strength);
             Assert.Equal(76, unit.Stats.Melee);
             Assert.Equal("SECTOID_ARMOR0", unit.ArmorId);
+            Assert.Equal(16, unit.StandHeight);
+            Assert.Equal(12, unit.KneelHeight);
+            Assert.Equal(0, unit.FloatHeight);
         }
 
         [Fact]
@@ -44,6 +47,9 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Equal(20, unit.Stats.Strength);
             Assert.Equal(20, unit.Stats.Melee);
             Assert.Null(unit.ArmorId);
+            Assert.Equal(22, unit.StandHeight);
+            Assert.Equal(14, unit.KneelHeight);
+            Assert.Equal(0, unit.FloatHeight);
         }
 
         [Fact]
@@ -57,6 +63,21 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Equal(3, armor.Side);
             Assert.Equal(2, armor.Rear);
             Assert.Equal(2, armor.Under);
+            Assert.Equal(2, armor.Loftemps);
+        }
+
+        [Fact]
+        public void LoadArmor_ParsesStrNoneUcLoftempsAndArmorValues()
+        {
+            var armor = RuleYamlDecoder.LoadArmor(
+                Path.Combine(RulesDir, "armors.rul"), "STR_NONE_UC");
+
+            Assert.Equal("STR_NONE_UC", armor.Id);
+            Assert.Equal(12, armor.Front);
+            Assert.Equal(8, armor.Side);
+            Assert.Equal(5, armor.Rear);
+            Assert.Equal(2, armor.Under);
+            Assert.Equal(3, armor.Loftemps);
         }
 
         [Fact]
