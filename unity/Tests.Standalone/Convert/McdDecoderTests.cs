@@ -38,5 +38,16 @@ namespace OpenXcom.Core.Tests.Convert
             // ScanG is the only 16-bit little-endian read: bytes 20-21
             Assert.Equal(raw[20] | (raw[21] << 8), r0.ScanG);
         }
+
+        [Fact]
+        public void Load_ParsesLoftBytesAtOffset8Through19()
+        {
+            var raw = Mcd();
+            var records = McdDecoder.Load(raw);
+            var r0 = records[0];
+
+            for (int i = 0; i < 12; i++)
+                Assert.Equal(raw[8 + i], r0.Loft[i]);
+        }
     }
 }

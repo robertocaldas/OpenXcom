@@ -5,6 +5,7 @@ namespace Xcom.Convert.Decoders
     public sealed class McdRecord
     {
         public byte[] Frames = new byte[8]; // animation frames (indices into the terrain PCK)
+        public byte[] Loft = new byte[12];  // bytes 8-19: per-Z-layer index into LOFTEMPS.DAT's templates
         public int ScanG;
         public bool IsUfoDoor;
         public bool StopLOS;
@@ -61,6 +62,7 @@ namespace Xcom.Convert.Decoders
                 int b = i * RecordSize;
                 var r = new McdRecord();
                 for (int f = 0; f < 8; f++) r.Frames[f] = mcd[b + f];
+                for (int f = 0; f < 12; f++) r.Loft[f] = mcd[b + 8 + f];
                 r.ScanG        = mcd[b + 20] | (mcd[b + 21] << 8);
                 r.IsUfoDoor    = mcd[b + 30] != 0;
                 r.StopLOS      = mcd[b + 31] != 0;
