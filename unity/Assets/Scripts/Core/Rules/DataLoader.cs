@@ -43,6 +43,7 @@ namespace OpenXcom.Core.Rules
                     Armor = r.Armor,
                     TerrainLevel = r.TLevel,
                     YOffset = r.PLevel,
+                    Loft = ToIntArray(r.Loft),
                     DatasetName = datasetName,
                     LocalIndex = i,
                 });
@@ -78,7 +79,7 @@ namespace OpenXcom.Core.Rules
 
             var result = new List<RuleArmor>(raw.Count);
             foreach (var r in raw)
-                result.Add(new RuleArmor(r.Id, r.Front, r.Side, r.Rear, r.Under));
+                result.Add(new RuleArmor(r.Id, r.Front, r.Side, r.Rear, r.Under, r.Loftemps));
             return result;
         }
 
@@ -99,9 +100,16 @@ namespace OpenXcom.Core.Rules
                     Bravery = r.Stats.Bravery, Reactions = r.Stats.Reactions, Firing = r.Stats.Firing,
                     Throwing = r.Stats.Throwing, Strength = r.Stats.Strength, Melee = r.Stats.Melee,
                 };
-                result.Add(new RuleUnit(r.Id, stats, armor));
+                result.Add(new RuleUnit(r.Id, stats, armor, r.StandHeight, r.KneelHeight, r.FloatHeight));
             }
             return result;
+        }
+
+        public static ushort[] LoadLoftemps(string gameDataDir)
+        {
+            string path = Path.Combine(gameDataDir, "loftemps.json");
+            string json = File.ReadAllText(path);
+            return JsonConvert.DeserializeObject<ushort[]>(json);
         }
 
         public static List<RuleItem> LoadItems(string gameDataDir)
@@ -149,6 +157,7 @@ namespace OpenXcom.Core.Rules
             public int Armor { get; set; }
             public int TLevel { get; set; }
             public int PLevel { get; set; }
+            public byte[] Loft { get; set; }
         }
 
         private sealed class RawDatasetInfo
@@ -210,6 +219,9 @@ namespace OpenXcom.Core.Rules
             public string Id { get; set; }
             public RawUnitStats Stats { get; set; }
             public string ArmorId { get; set; }
+            public int StandHeight { get; set; }
+            public int KneelHeight { get; set; }
+            public int FloatHeight { get; set; }
         }
 
         private sealed class RawArmorEntry
@@ -219,6 +231,7 @@ namespace OpenXcom.Core.Rules
             public int Side { get; set; }
             public int Rear { get; set; }
             public int Under { get; set; }
+            public int Loftemps { get; set; }
         }
 
         private sealed class RawItemEntry
@@ -233,6 +246,13 @@ namespace OpenXcom.Core.Rules
             public int TuSnap { get; set; }
             public int TuAimed { get; set; }
             public int TuAuto { get; set; }
+        }
+
+        private static int[] ToIntArray(byte[] bytes)
+        {
+            var result = new int[bytes.Length];
+            for (int i = 0; i < bytes.Length; i++) result[i] = bytes[i];
+            return result;
         }
     }
 }

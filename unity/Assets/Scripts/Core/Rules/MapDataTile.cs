@@ -24,6 +24,9 @@ namespace OpenXcom.Core.Rules
         public int TerrainLevel; // MCD T_Level
         public int YOffset;      // MCD P_Level
 
+        /// <summary>Per-Z-layer index (0-11) into LOFTEMPS.DAT's templates. MCD bytes 8-19.</summary>
+        public int[] Loft = new int[12];
+
         /// <summary>Which dataset's own atlas this record's Frames index into.</summary>
         public string DatasetName;
 

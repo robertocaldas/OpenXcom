@@ -39,7 +39,8 @@ namespace OpenXcom.Core.Tests
                     ""TuFly"": 1,
                     ""Armor"": 20,
                     ""TLevel"": -1,
-                    ""PLevel"": 3
+                    ""PLevel"": 3,
+                    ""Loft"": ""AAAAAAAAAAAAAAAA""
                 }
             ]";
             File.WriteAllText(Path.Combine(_dir, "tiles-TEST.json"), json);
@@ -59,6 +60,37 @@ namespace OpenXcom.Core.Tests
             Assert.Equal("TEST", t.DatasetName);
             Assert.Equal(0, t.LocalIndex);
             Assert.True(t.IsBackTileObject); // BigWall=2 < 6
+        }
+
+        [Fact]
+        public void LoadTiles_ParsesLoftArray()
+        {
+            string json = @"[
+                {
+                    ""Frames"": ""/+A/AQIDBAU="",
+                    ""ScanG"": 42, ""IsUfoDoor"": false, ""StopLOS"": true, ""NoFloor"": false,
+                    ""BigWall"": 2, ""Gravlift"": false, ""IsDoor"": false, ""BlockFire"": false,
+                    ""BlockSmoke"": false, ""TuWalk"": 4, ""TuSlide"": 8, ""TuFly"": 1, ""Armor"": 20,
+                    ""TLevel"": -1, ""PLevel"": 3,
+                    ""Loft"": ""AwAAAAAAAAAAAAAA""
+                }
+            ]";
+            File.WriteAllText(Path.Combine(_dir, "tiles-TEST.json"), json);
+
+            var tiles = DataLoader.LoadTiles(_dir, "TEST");
+
+            // "AwAAAAAAAAAAAAAA" base64-decodes to {3,0,0,0,0,0,0,0,0,0,0,0}.
+            Assert.Equal(new[] { 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, tiles[0].Loft);
+        }
+
+        [Fact]
+        public void LoadLoftemps_ParsesFlatUshortArray()
+        {
+            File.WriteAllText(Path.Combine(_dir, "loftemps.json"), "[0, 65535, 1, 32768]");
+
+            var loftemps = DataLoader.LoadLoftemps(_dir);
+
+            Assert.Equal(new ushort[] { 0, 65535, 1, 32768 }, loftemps);
         }
 
         [Fact]
@@ -112,7 +144,7 @@ namespace OpenXcom.Core.Tests
         [Fact]
         public void LoadArmors_ParsesFields()
         {
-            string json = @"[{ ""Id"": ""SECTOID_ARMOR0"", ""Front"": 4, ""Side"": 3, ""Rear"": 2, ""Under"": 2 }]";
+            string json = @"[{ ""Id"": ""SECTOID_ARMOR0"", ""Front"": 4, ""Side"": 3, ""Rear"": 2, ""Under"": 2, ""Loftemps"": 2 }]";
             File.WriteAllText(Path.Combine(_dir, "armors.json"), json);
 
             var armors = DataLoader.LoadArmors(_dir);
@@ -123,6 +155,7 @@ namespace OpenXcom.Core.Tests
             Assert.Equal(3, armors[0].Side);
             Assert.Equal(2, armors[0].Rear);
             Assert.Equal(2, armors[0].Under);
+            Assert.Equal(2, armors[0].Loftemps);
         }
 
         [Fact]
@@ -130,14 +163,16 @@ namespace OpenXcom.Core.Tests
         {
             string json = @"[
                 { ""Id"": ""STR_SECTOID_SOLDIER"", ""ArmorId"": ""SECTOID_ARMOR0"",
+                  ""StandHeight"": 16, ""KneelHeight"": 12, ""FloatHeight"": 0,
                   ""Stats"": { ""TimeUnits"": 54, ""Stamina"": 90, ""Health"": 30, ""Bravery"": 80,
                                 ""Reactions"": 63, ""Firing"": 52, ""Throwing"": 58, ""Strength"": 30, ""Melee"": 76 } },
                 { ""Id"": ""STR_SOLDIER"", ""ArmorId"": null,
+                  ""StandHeight"": 22, ""KneelHeight"": 14, ""FloatHeight"": 0,
                   ""Stats"": { ""TimeUnits"": 50, ""Stamina"": 40, ""Health"": 25, ""Bravery"": 10,
                                 ""Reactions"": 30, ""Firing"": 40, ""Throwing"": 50, ""Strength"": 20, ""Melee"": 20 } }
             ]";
             File.WriteAllText(Path.Combine(_dir, "units.json"), json);
-            var sectoidArmor = new RuleArmor("SECTOID_ARMOR0", front: 4, side: 3, rear: 2, under: 2);
+            var sectoidArmor = new RuleArmor("SECTOID_ARMOR0", front: 4, side: 3, rear: 2, under: 2, loftemps: 2);
             var armorsById = new Dictionary<string, RuleArmor> { { "SECTOID_ARMOR0", sectoidArmor } };
 
             var units = DataLoader.LoadUnits(_dir, armorsById);
@@ -146,9 +181,13 @@ namespace OpenXcom.Core.Tests
             var sectoid = units.Find(u => u.Id == "STR_SECTOID_SOLDIER");
             Assert.Same(sectoidArmor, sectoid.Armor);
             Assert.Equal(54, sectoid.Stats.TimeUnits);
+            Assert.Equal(16, sectoid.StandHeight);
+            Assert.Equal(12, sectoid.KneelHeight);
             var soldier = units.Find(u => u.Id == "STR_SOLDIER");
             Assert.Equal(RuleArmor.None.Id, soldier.Armor.Id); // no ArmorId -> falls back to RuleArmor.None
             Assert.Equal(50, soldier.Stats.TimeUnits);
+            Assert.Equal(22, soldier.StandHeight);
+            Assert.Equal(14, soldier.KneelHeight);
         }
 
         [Fact]
