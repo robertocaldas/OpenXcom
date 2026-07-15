@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using OpenXcom.Core.Common;
+using OpenXcom.Core.Rules;
 
 namespace OpenXcom.Core.Battle
 {
@@ -65,6 +66,68 @@ namespace OpenXcom.Core.Battle
             }
 
             return visible;
+        }
+
+        /// <summary>
+        /// Checks what (if anything) occupies this exact voxel: a terrain
+        /// part's Loft bitmask, then (if nothing terrain-solid) a living
+        /// unit's Loftemps cylinder. loftData is the flat LOFTEMPS.DAT table
+        /// (DataLoader.LoadLoftemps) - any loft index outside its bounds is
+        /// treated as passable, not an error, so an empty/undersized table
+        /// just means "no voxel data configured" rather than crashing.
+        /// Port of TileEngine::voxelCheck (src/Battlescape/TileEngine.cpp:4529-4628),
+        /// scoped down to this rewrite's data model: no UFO doors, no
+        /// gravlift-floor special case, no big (2x2) units - none of these
+        /// exist in Core's Tile/MapDataTile/RuleArmor model today, so
+        /// porting their branches would be dead code, not a real
+        /// simplification of working behavior.
+        /// </summary>
+        public static VoxelHit VoxelCheck(TileGrid grid, ushort[] loftData, Position voxel, BattleUnit excludeUnit)
+        {
+            if (voxel.X < 0 || voxel.Y < 0 || voxel.Z < 0)
+                return new VoxelHit(VoxelType.OutOfBounds, voxel);
+
+            var tilePos = new Position(voxel.X / 16, voxel.Y / 16, voxel.Z / 24);
+            var tile = grid[tilePos];
+            if (tile == null)
+                return new VoxelHit(VoxelType.OutOfBounds, voxel);
+
+            int zLayer = (voxel.Z % 24) / 2;
+            int lx = 15 - (voxel.X % 16);
+            int ly = voxel.Y % 16;
+
+            var parts = new (VoxelType type, MapDataTile part)[]
+            {
+                (VoxelType.Floor, tile.Floor),
+                (VoxelType.WestWall, tile.WestWall),
+                (VoxelType.NorthWall, tile.NorthWall),
+                (VoxelType.Object, tile.Object),
+            };
+
+            foreach (var (type, part) in parts)
+            {
+                if (part == null) continue;
+                int loftId = part.Loft[zLayer];
+                int idx = loftId * 16 + ly;
+                if (idx < loftData.Length && (loftData[idx] & (1 << lx)) != 0)
+                    return new VoxelHit(type, voxel);
+            }
+
+            var unit = tile.Occupant;
+            if (unit != null && unit.IsAlive && unit != excludeUnit)
+            {
+                int terrainLevel = System.Math.Min(0, tile.Floor?.TerrainLevel ?? 0);
+                int tz = tilePos.Z * 24 + unit.Rules.FloatHeight - terrainLevel;
+                if (voxel.Z > tz && voxel.Z <= tz + unit.Height)
+                {
+                    int loftId = unit.Armor.Loftemps;
+                    int idx = loftId * 16 + ly;
+                    if (idx < loftData.Length && (loftData[idx] & (1 << lx)) != 0)
+                        return new VoxelHit(VoxelType.Unit, voxel, unit);
+                }
+            }
+
+            return VoxelHit.Empty(voxel);
         }
 
         /// <summary>Standard integer Bresenham line walk between two tile positions (z held constant at `from.Z`).</summary>

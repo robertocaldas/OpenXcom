@@ -36,6 +36,9 @@ namespace OpenXcom.Core.Battle
         public RuleArmor Armor => Rules.Armor;
         public bool IsAlive => Health > 0;
 
+        /// <summary>Current standing/kneeling body height in voxel Z-units. Port of BattleUnit::getHeight (src/Savegame/BattleUnit.cpp:3942).</summary>
+        public int Height => Kneeled ? Rules.KneelHeight : Rules.StandHeight;
+
         public BattleUnit(RuleUnit rules, Faction faction, string name = null)
         {
             Rules = rules;

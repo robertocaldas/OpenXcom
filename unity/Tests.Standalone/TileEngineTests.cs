@@ -1,5 +1,6 @@
 using OpenXcom.Core.Battle;
 using OpenXcom.Core.Common;
+using OpenXcom.Core.Rules;
 using Xunit;
 
 namespace OpenXcom.Core.Tests
@@ -118,6 +119,105 @@ namespace OpenXcom.Core.Tests
             var visible = TileEngine.ComputeVisibleTiles(grid, new Position(0, 0, 0));
 
             Assert.Contains(new Position(14, 14, 0), visible);
+        }
+
+        private static ushort[] SolidLoftData()
+        {
+            // Template 0: empty (all bits clear, the default MapDataTile.Loft value).
+            // Template 1: fully solid 16x16 at every row - any voxel inside it is "hit".
+            var data = new ushort[32];
+            for (int row = 0; row < 16; row++)
+                data[16 + row] = 0xFFFF;
+            return data;
+        }
+
+        private static MapDataTile SolidPart()
+        {
+            var part = new MapDataTile();
+            for (int i = 0; i < 12; i++) part.Loft[i] = 1;
+            return part;
+        }
+
+        [Fact]
+        public void VoxelCheck_SolidTerrainLoftBlocksTheVoxel()
+        {
+            var grid = new TileGrid(2, 2, 1);
+            grid.At(0, 0, 0).Object = SolidPart();
+
+            var hit = TileEngine.VoxelCheck(grid, SolidLoftData(), new Position(4, 4, 4), excludeUnit: null);
+
+            Assert.Equal(VoxelType.Object, hit.Type);
+        }
+
+        [Fact]
+        public void VoxelCheck_EmptyLoftTemplateDoesNotBlock()
+        {
+            var grid = new TileGrid(2, 2, 1);
+            grid.At(0, 0, 0).Floor = new MapDataTile(); // Loft defaults to all-zero -> template 0 -> empty
+
+            var hit = TileEngine.VoxelCheck(grid, SolidLoftData(), new Position(4, 4, 4), excludeUnit: null);
+
+            Assert.Equal(VoxelType.Empty, hit.Type);
+        }
+
+        [Fact]
+        public void VoxelCheck_NegativeCoordinateIsOutOfBounds()
+        {
+            var grid = new TileGrid(2, 2, 1);
+            var hit = TileEngine.VoxelCheck(grid, SolidLoftData(), new Position(-1, 0, 0), excludeUnit: null);
+            Assert.Equal(VoxelType.OutOfBounds, hit.Type);
+        }
+
+        [Fact]
+        public void VoxelCheck_LivingUnitWithinItsHeightBandIsHit()
+        {
+            var grid = new TileGrid(2, 2, 1);
+            var armor = new RuleArmor("A", 0, 0, 0, 0, loftemps: 1);
+            var unit = new BattleUnit(new RuleUnit("STR_TEST", UnitStats.Rookie, armor, standHeight: 22, kneelHeight: 14), Faction.Player)
+            {
+                Position = new Position(0, 0, 0),
+            };
+            grid.At(0, 0, 0).Occupant = unit;
+
+            // tz = 0*24 + FloatHeight(0) - terrainLevel(0) = 0; unit.Height (standing) = 22, so
+            // voxel.Z in (0, 22] is inside the unit's body.
+            var hit = TileEngine.VoxelCheck(grid, SolidLoftData(), new Position(4, 4, 10), excludeUnit: null);
+
+            Assert.Equal(VoxelType.Unit, hit.Type);
+            Assert.Same(unit, hit.Unit);
+        }
+
+        [Fact]
+        public void VoxelCheck_ExcludedUnitIsNotHit()
+        {
+            var grid = new TileGrid(2, 2, 1);
+            var armor = new RuleArmor("A", 0, 0, 0, 0, loftemps: 1);
+            var unit = new BattleUnit(new RuleUnit("STR_TEST", UnitStats.Rookie, armor, standHeight: 22, kneelHeight: 14), Faction.Player)
+            {
+                Position = new Position(0, 0, 0),
+            };
+            grid.At(0, 0, 0).Occupant = unit;
+
+            var hit = TileEngine.VoxelCheck(grid, SolidLoftData(), new Position(4, 4, 10), excludeUnit: unit);
+
+            Assert.Equal(VoxelType.Empty, hit.Type);
+        }
+
+        [Fact]
+        public void VoxelCheck_VoxelAboveUnitsHeightBandMisses()
+        {
+            var grid = new TileGrid(2, 2, 1);
+            var armor = new RuleArmor("A", 0, 0, 0, 0, loftemps: 1);
+            var unit = new BattleUnit(new RuleUnit("STR_TEST", UnitStats.Rookie, armor, standHeight: 22, kneelHeight: 14), Faction.Player)
+            {
+                Position = new Position(0, 0, 0),
+            };
+            grid.At(0, 0, 0).Occupant = unit;
+
+            // voxel.Z = 23 is above tz(0) + Height(22) = 22 -> outside the unit's body.
+            var hit = TileEngine.VoxelCheck(grid, SolidLoftData(), new Position(4, 4, 23), excludeUnit: null);
+
+            Assert.Equal(VoxelType.Empty, hit.Type);
         }
     }
 }
