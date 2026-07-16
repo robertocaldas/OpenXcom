@@ -1,3 +1,4 @@
+using System.Linq;
 using OpenXcom.Core.Battle;
 using OpenXcom.Core.Common;
 using OpenXcom.Core.Rules;
@@ -40,6 +41,25 @@ namespace OpenXcom.Core.Tests
         {
             var stats = new UnitStats { Health = health };
             return new BattleUnit(new RuleUnit("DEFENDER", stats, RuleArmor.None), Faction.Hostile)
+            {
+                Position = pos,
+            };
+        }
+
+        // Post-Phase-8 TryFire resolves hit/miss via a real voxel trace
+        // (TileEngine.CalculateLine), not a direct percent roll - a
+        // "guaranteed hit" now also needs real geometry for the traced aim
+        // point to land in, not just 100 accuracy. FullTileArmor/
+        // FullTileLoftData (below) give the defender a fully-solid loft
+        // template across its whole tile column; standHeight/kneelHeight 23
+        // (not some far-off value) keeps the aim point's Z itself inside the
+        // map's single tile-level (voxel Z 0-23) while still covering
+        // essentially that entire band, so any accuracy-driven deviation
+        // still lands inside the defender deterministically.
+        private static BattleUnit MakeFullTileDefender(Position pos, int health)
+        {
+            var stats = new UnitStats { Health = health };
+            return new BattleUnit(new RuleUnit("DEFENDER", stats, FullTileArmor(), standHeight: 23, kneelHeight: 23), Faction.Hostile)
             {
                 Position = pos,
             };
@@ -110,9 +130,14 @@ namespace OpenXcom.Core.Tests
             // capped at 200*30/100 = 60. A defender with 10000 health can
             // never die to this hit no matter what the RNG rolls - this test
             // is deterministic without needing to know/guess a specific seed.
+            // Uses MakeFullTileDefender/LoftData (not the plain
+            // MakeDefender/RuleArmor.None pairing the other non-firing tests
+            // above use) because TryFire's hit itself is no longer a direct
+            // percent roll - see MakeFullTileDefender's comment.
             var (grid, state) = MakeOpenBattle();
+            state.LoftData = FullTileLoftData();
             var attacker = MakeGuaranteedHitAttacker(new Position(0, 0, 0));
-            var defender = MakeDefender(new Position(3, 0, 0), health: 10000);
+            var defender = MakeFullTileDefender(new Position(3, 0, 0), health: 10000);
             grid.At(3, 0, 0).Occupant = defender;
 
             var result = state.TryFire(attacker, attacker.RightHand, BattleActionType.AimedShot, defender);
@@ -145,9 +170,9 @@ namespace OpenXcom.Core.Tests
             for (uint seed = 1; seed <= 100; seed++)
             {
                 var freshGrid = new TileGrid(25, 1, 1);
-                var freshState = new BattleState(freshGrid, new Rng(seed));
+                var freshState = new BattleState(freshGrid, new Rng(seed)) { LoftData = FullTileLoftData() };
                 var attacker = MakeGuaranteedHitAttacker(new Position(0, 0, 0));
-                var defender = MakeDefender(new Position(3, 0, 0), health: 1);
+                var defender = MakeFullTileDefender(new Position(3, 0, 0), health: 1);
                 freshGrid.At(3, 0, 0).Occupant = defender;
 
                 var result = freshState.TryFire(attacker, attacker.RightHand, BattleActionType.AimedShot, defender);
@@ -168,6 +193,112 @@ namespace OpenXcom.Core.Tests
             }
 
             Assert.True(anyKillObserved, "Expected at least one of 100 seeds to produce a lethal hit on a 1-health defender.");
+        }
+
+        // A fully-solid loft template (index 1) + a generous height band, shared
+        // by the tests below so a fired shot's small, bounded deviation still
+        // reliably lands inside whichever unit uses it - makes the outcome
+        // deterministic without depending on a specific Rng seed's exact numbers.
+        private static ushort[] FullTileLoftData()
+        {
+            var data = new ushort[32]; // template 0 = empty, template 1 = fully solid
+            for (int row = 0; row < 16; row++) data[16 + row] = 0xFFFF;
+            return data;
+        }
+
+        private static RuleArmor FullTileArmor() => new("FULL_TILE", 0, 0, 0, 0, loftemps: 1);
+
+        [Fact]
+        public void TryFire_ClearShotWithNoObstructionHitsTheIntendedTarget()
+        {
+            var grid = new TileGrid(5, 5, 1);
+            var state = new BattleState(grid) { LoftData = FullTileLoftData() };
+            var attacker = new BattleUnit(RuleUnit.Soldier, Faction.Player) { Position = new Position(0, 0, 0) };
+            var defender = new BattleUnit(new RuleUnit("DEFENDER", UnitStats.Rookie, FullTileArmor(), standHeight: 23, kneelHeight: 23), Faction.Hostile)
+            {
+                Position = new Position(3, 0, 0),
+            };
+            grid.At(0, 0, 0).Occupant = attacker;
+            grid.At(3, 0, 0).Occupant = defender;
+            state.Units.Add(attacker);
+            state.Units.Add(defender);
+            var weapon = new BattleItem(RuleItem.Rifle);
+            attacker.RightHand = weapon;
+            int healthBefore = defender.Health;
+
+            var result = state.TryFire(attacker, weapon, BattleActionType.Snapshot, defender);
+            var events = state.DequeueEvents();
+
+            Assert.Equal(FireOutcome.Fired, result.Outcome);
+            Assert.True(result.Shot.Hit);
+            Assert.True(defender.Health < healthBefore);
+            var hitEvent = System.Linq.Enumerable.OfType<UnitHitEvent>(events).Single();
+            Assert.Same(defender, hitEvent.Unit);
+            var fired = System.Linq.Enumerable.OfType<ProjectileFiredEvent>(events).Single();
+            Assert.NotEmpty(fired.Trajectory);
+        }
+
+        [Fact]
+        public void TryFire_HitsAnIntermediateBystanderInsteadOfTheFarIntendedTarget()
+        {
+            // Bystander sits directly between attacker and the intended target,
+            // occupying its entire tile's voxel column (FullTileArmor/LoftData)
+            // across a tall height band - any ray toward the far target passes
+            // through the bystander's tile first, regardless of the small
+            // end-point deviation Combat.ApplyDeviation applies near the target.
+            var grid = new TileGrid(10, 5, 1);
+            var state = new BattleState(grid) { LoftData = FullTileLoftData() };
+            var attacker = new BattleUnit(RuleUnit.Soldier, Faction.Player) { Position = new Position(0, 0, 0) };
+            var bystander = new BattleUnit(new RuleUnit("BYSTANDER", UnitStats.Rookie, FullTileArmor(), standHeight: 23, kneelHeight: 23), Faction.Hostile)
+            {
+                Position = new Position(1, 0, 0),
+            };
+            var intendedTarget = new BattleUnit(new RuleUnit("FAR_TARGET", UnitStats.Rookie, FullTileArmor(), standHeight: 23, kneelHeight: 23), Faction.Hostile)
+            {
+                Position = new Position(8, 0, 0),
+            };
+            grid.At(0, 0, 0).Occupant = attacker;
+            grid.At(1, 0, 0).Occupant = bystander;
+            grid.At(8, 0, 0).Occupant = intendedTarget;
+            state.Units.Add(attacker);
+            state.Units.Add(bystander);
+            state.Units.Add(intendedTarget);
+            var weapon = new BattleItem(RuleItem.Rifle);
+            attacker.RightHand = weapon;
+            int targetHealthBefore = intendedTarget.Health;
+
+            var result = state.TryFire(attacker, weapon, BattleActionType.Snapshot, intendedTarget);
+            var events = state.DequeueEvents();
+
+            Assert.True(result.Shot.Hit);
+            var hitEvent = System.Linq.Enumerable.OfType<UnitHitEvent>(events).Single();
+            Assert.Same(bystander, hitEvent.Unit); // hit the bystander, not the unit that was aimed at
+            Assert.Equal(targetHealthBefore, intendedTarget.Health); // intended target untouched
+            var fired = System.Linq.Enumerable.OfType<ProjectileFiredEvent>(events).Single();
+            Assert.Same(intendedTarget, fired.Defender); // event still records who was aimed at
+        }
+
+        [Fact]
+        public void TryFire_WithEmptyLoftDataEveryShotMissesRatherThanCrashing()
+        {
+            // LoftData defaults to empty (BattleState.LoftData's default) until a
+            // scene bootstrap loads real data - VoxelCheck's bounds-checked lookup
+            // means this degrades to "no voxel data configured", not a crash.
+            var grid = new TileGrid(5, 5, 1);
+            var state = new BattleState(grid);
+            var attacker = new BattleUnit(RuleUnit.Soldier, Faction.Player) { Position = new Position(0, 0, 0) };
+            var defender = new BattleUnit(RuleUnit.Sectoid, Faction.Hostile) { Position = new Position(3, 0, 0) };
+            grid.At(0, 0, 0).Occupant = attacker;
+            grid.At(3, 0, 0).Occupant = defender;
+            state.Units.Add(attacker);
+            state.Units.Add(defender);
+            var weapon = new BattleItem(RuleItem.Rifle);
+            attacker.RightHand = weapon;
+
+            var result = state.TryFire(attacker, weapon, BattleActionType.Snapshot, defender);
+
+            Assert.Equal(FireOutcome.Fired, result.Outcome);
+            Assert.False(result.Shot.Hit);
         }
 
         [Fact]

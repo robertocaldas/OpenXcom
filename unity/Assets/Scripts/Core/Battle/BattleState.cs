@@ -43,6 +43,16 @@ namespace OpenXcom.Core.Battle
         public Faction CurrentTurn { get; set; } = Faction.Player;
         public Rng Rng { get; }
 
+        /// <summary>
+        /// Flat LOFTEMPS.DAT voxel bitmask table (DataLoader.LoadLoftemps),
+        /// used by TileEngine.CalculateLine/VoxelCheck for shot resolution.
+        /// Empty by default; a scene bootstrap must set this before firing
+        /// produces meaningful hits - VoxelCheck treats any loft index
+        /// outside an empty/undersized table as passable, so an unset table
+        /// degrades to "every shot misses" rather than crashing.
+        /// </summary>
+        public ushort[] LoftData { get; set; } = System.Array.Empty<ushort>();
+
         private readonly Queue<BattleEvent> _events = new();
 
         public BattleState(TileGrid grid, Rng rng = null)
@@ -132,13 +142,17 @@ namespace OpenXcom.Core.Battle
         /// <summary>
         /// Attempts to fire `weapon` from `attacker` at `defender`. Gated by
         /// line of sight (TileEngine.ComputeVisibleTiles) and TU budget, in
-        /// that order - LOS is checked first since it costs nothing to check
-        /// and shouldn't consume TU on a doomed attempt. TU is spent
-        /// immediately once both gates pass; a kill clears the defender's
-        /// tile occupancy synchronously (no death-animation state machine
-        /// this phase). Always enqueues one ProjectileFiredEvent when a shot
-        /// is actually fired (hit or miss), plus UnitHitEvent/UnitDiedEvent
-        /// as applicable.
+        /// that order. Once both gates pass, TU is spent immediately and the
+        /// shot's accuracy is converted into a deviated aim voxel
+        /// (Combat.ApplyDeviation) which is then traced through real
+        /// geometry (TileEngine.CalculateLine) - the trace's actual hit
+        /// (terrain, `defender`, or a different unit caught in the deviated
+        /// path) is what takes damage, not necessarily `defender` itself.
+        /// A kill clears the hit unit's tile occupancy synchronously (no
+        /// death-animation state machine this phase). Always enqueues one
+        /// ProjectileFiredEvent when a shot is actually fired (hit or miss),
+        /// carrying the traced voxel path, plus UnitHitEvent/UnitDiedEvent
+        /// for whichever unit was actually hit.
         /// </summary>
         public FireResult TryFire(BattleUnit attacker, BattleItem weapon, BattleActionType action, BattleUnit defender)
         {
@@ -151,18 +165,32 @@ namespace OpenXcom.Core.Battle
                 return new FireResult { Outcome = FireOutcome.InsufficientTu, Shot = ShotResult.Miss };
 
             attacker.Spend(tuCost);
-            var shot = Combat.ResolveShot(Rng, attacker, weapon, action, defender);
-            Enqueue(new ProjectileFiredEvent(attacker, defender, shot.Hit));
+
+            int accuracy = Combat.HitChance(attacker, weapon, action, defender.Position);
+            var originVoxel = TileEngine.GetOriginVoxel(Grid, attacker, defender.Position);
+            var targetVoxel = new Position(
+                defender.Position.X * 16 + 8,
+                defender.Position.Y * 16 + 8,
+                defender.Position.Z * 24 + defender.Height / 2);
+            var aimVoxel = Combat.ApplyDeviation(Rng, originVoxel, targetVoxel, accuracy);
+
+            var trace = TileEngine.CalculateLine(Grid, LoftData, originVoxel, aimVoxel, attacker);
+            var trajectory = new List<Position> { originVoxel, trace.Voxel };
+
+            var hitUnit = trace.Type == VoxelType.Unit ? trace.Unit : null;
+            var shot = hitUnit != null ? Combat.ApplyDamage(Rng, attacker, weapon.Rules, hitUnit) : ShotResult.Miss;
+
+            Enqueue(new ProjectileFiredEvent(attacker, defender, shot.Hit, trajectory));
 
             if (shot.Hit)
             {
-                var side = Combat.HitSide(attacker.Position, defender.Position);
-                Enqueue(new UnitHitEvent(defender, shot.AppliedDamage, side));
+                var side = Combat.HitSide(attacker.Position, hitUnit.Position);
+                Enqueue(new UnitHitEvent(hitUnit, shot.AppliedDamage, side));
 
                 if (shot.Killed)
                 {
-                    Grid[defender.Position].Occupant = null;
-                    Enqueue(new UnitDiedEvent(defender));
+                    Grid[hitUnit.Position].Occupant = null;
+                    Enqueue(new UnitDiedEvent(hitUnit));
                 }
             }
 

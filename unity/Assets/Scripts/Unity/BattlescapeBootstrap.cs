@@ -59,6 +59,7 @@ namespace OpenXcom.Unity
             var sectoidAtlas = AtlasLoader.Load(gameDataDir, "units-SECTOID");
 
             var state = new BattleState(grid);
+            state.LoftData = DataLoader.LoadLoftemps(gameDataDir);
             var unitTransforms = new Dictionary<BattleUnit, Transform>();
 
             Spawn(state, grid, unitTransforms, unitsById["STR_SOLDIER"], itemsById["STR_RIFLE"],
