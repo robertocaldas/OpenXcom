@@ -5,6 +5,27 @@ namespace OpenXcom.Core.Tests.Unity
 {
     public class UnitSpriteFramesTests
     {
+        [Fact]
+        public void BaseConstants_MatchUnitSpriteCppLiterals()
+        {
+            // Guards against a transcription slip in these ported magic numbers -
+            // every other test in this file computes its expected value from
+            // these same constants, so none of them would catch a wrong literal
+            // here (confirmed via mutation testing during code review).
+            Assert.Equal(16, UnitSpriteFrames.LegsStandBase);
+            Assert.Equal(56, UnitSpriteFrames.LegsWalkBase);
+            Assert.Equal(0, UnitSpriteFrames.LeftArmStandBase);
+            Assert.Equal(40, UnitSpriteFrames.LeftArmWalkBase);
+            Assert.Equal(8, UnitSpriteFrames.RightArmStandBase);
+            Assert.Equal(48, UnitSpriteFrames.RightArmWalkBase);
+            Assert.Equal(32, UnitSpriteFrames.TorsoBase);
+            Assert.Equal(232, UnitSpriteFrames.RightArmOneHanded);
+            Assert.Equal(240, UnitSpriteFrames.LeftArmTwoHanded);
+            Assert.Equal(248, UnitSpriteFrames.RightArmTwoHandedCarry);
+            Assert.Equal(256, UnitSpriteFrames.RightArmTwoHandedAim);
+            Assert.Equal(264, UnitSpriteFrames.DieBase);
+        }
+
         [Theory]
         [InlineData(0)]
         [InlineData(4)]
