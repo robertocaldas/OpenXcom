@@ -36,6 +36,7 @@ namespace OpenXcom.Unity.Rendering
             RightArm = 1,
             Torso = 2,
             LeftArm = 3,
+            Item = 4,
         }
 
         /// <summary>
@@ -92,23 +93,24 @@ namespace OpenXcom.Unity.Rendering
         /// offset above the highest SortingOrder any tile in a
         /// mapWidth x mapLength grid could reach (tiles top out at
         /// tileIndex*5+3), with the same (z,y,x) ordering as a tiebreak
-        /// among units, and a further tileIndex*4+part sub-order so a
-        /// single unit's 4 body-part layers (UnitPartRank) stack in the
-        /// correct back-to-front order without colliding with a
-        /// neighboring unit's layers (no two units ever share a tileIndex -
-        /// one occupant per tile). Unity's Renderer.sortingOrder is stored
-        /// internally as a 16-bit value even though its public type is int,
-        /// so values outside short.MinValue..short.MaxValue silently wrap -
-        /// confirmed live in the Editor, where an earlier x1000-offset
-        /// version gave CULTA00's 10x10 grid a unit order of 100011, which
-        /// Unity wrapped to -31061, putting units BEHIND every tile instead
-        /// of in front of them (still invisible, just for a different
-        /// reason). [KNOWN LIMITATIONS] (1) a unit always draws in front of
-        /// tall walls/objects too, not just floors - fine for CULTA00 (zero
+        /// among units, and a further tileIndex*5+part sub-order so a
+        /// single unit's 5 body-part layers (UnitPartRank, including the
+        /// held-item layer) stack in the correct back-to-front order without
+        /// colliding with a neighboring unit's layers (no two units ever
+        /// share a tileIndex - one occupant per tile). Unity's
+        /// Renderer.sortingOrder is stored internally as a 16-bit value even
+        /// though its public type is int, so values outside
+        /// short.MinValue..short.MaxValue silently wrap - confirmed live in
+        /// the Editor, where an earlier x1000-offset version gave CULTA00's
+        /// 10x10 grid a unit order of 100011, which Unity wrapped to
+        /// -31061, putting units BEHIND every tile instead of in front of
+        /// them (still invisible, just for a different reason). [KNOWN
+        /// LIMITATIONS] (1) a unit always draws in front of tall
+        /// walls/objects too, not just floors - fine for CULTA00 (zero
         /// walls/objects), wrong for a future terrain where a unit should be
         /// hidden behind a tall object; (2) this still overflows the 16-bit
-        /// range for a single-z-layer grid bigger than roughly 36x36 tiles
-        /// (the tileIndex*4 sub-order roughly halves the previous ~73x73
+        /// range for a single-z-layer grid bigger than roughly 32x32 tiles
+        /// (the tileIndex*5 sub-order roughly halves the previous ~73x73
         /// headroom) - fine for CULTA00 (10x10), would need revisiting (e.g.
         /// a real Unity sorting layer instead of a numeric offset) for a
         /// much larger map; (3) the band is sized from mapWidth*mapLength
@@ -123,7 +125,7 @@ namespace OpenXcom.Unity.Rendering
         {
             long tileIndex = ((long)z * mapLength + y) * mapWidth + x;
             long unitBand = (long)mapWidth * mapLength * 5;
-            return (int)(unitBand + tileIndex * 4 + (int)part);
+            return (int)(unitBand + tileIndex * 5 + (int)part);
         }
 
         private const float RaycastDepthStep = 0.001f;

@@ -126,6 +126,22 @@ namespace OpenXcom.Core.Tests.Unity
         }
 
         [Fact]
+        public void UnitSortingOrder_FiveDistinctPartRanksNeverCollideWithinOneUnit()
+        {
+            var ranks = new[]
+            {
+                IsoProjection.UnitPartRank.Legs, IsoProjection.UnitPartRank.RightArm,
+                IsoProjection.UnitPartRank.Torso, IsoProjection.UnitPartRank.LeftArm,
+                IsoProjection.UnitPartRank.Item,
+            };
+            var orders = new System.Collections.Generic.HashSet<int>();
+            foreach (var rank in ranks)
+                orders.Add(IsoProjection.UnitSortingOrder(3, 3, 0, mapWidth: 10, mapLength: 10, rank));
+
+            Assert.Equal(5, orders.Count); // all 5 parts get distinct sort orders
+        }
+
+        [Fact]
         public void UnitSortingOrder_FitsWithinUnitySortingOrderInt16RangeForCulta00SizedGrids()
         {
             // Renderer.sortingOrder is stored internally as a 16-bit value even
