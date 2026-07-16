@@ -369,5 +369,34 @@ namespace OpenXcom.Core.Tests
             Assert.InRange(hit.Voxel.Y, 16, 31);
             Assert.InRange(hit.Voxel.Z, 24, 47);
         }
+
+        [Fact]
+        public void GetDirectionTo_EachCompassDirectionMapsToItsOwnIndex()
+        {
+            var origin = new Position(5, 5, 0);
+            Assert.Equal(0, TileEngine.GetDirectionTo(origin, new Position(5, 0, 0)));  // north
+            Assert.Equal(2, TileEngine.GetDirectionTo(origin, new Position(10, 5, 0))); // east
+            Assert.Equal(4, TileEngine.GetDirectionTo(origin, new Position(5, 10, 0))); // south
+            Assert.Equal(6, TileEngine.GetDirectionTo(origin, new Position(0, 5, 0)));  // west
+        }
+
+        [Fact]
+        public void GetOriginVoxel_AddsShooterHeightAndTerrainLevelOffset()
+        {
+            var grid = new TileGrid(3, 3, 1);
+            var shooter = new BattleUnit(new RuleUnit("STR_TEST", UnitStats.Rookie, RuleArmor.None,
+                standHeight: 22, kneelHeight: 14), Faction.Player)
+            {
+                Position = new Position(1, 1, 0),
+            };
+
+            var origin = TileEngine.GetOriginVoxel(grid, shooter, new Position(1, 0, 0));
+
+            // Base tile voxel origin (16,16,0) + Height(22) + FloatHeight(0) - TerrainLevel(0) - 4 = Z 18,
+            // plus the north-direction (dir 0) shift (dirX=8, dirY=1) on top of tile*16.
+            Assert.Equal(16 + 8, origin.X);
+            Assert.Equal(16 + 1, origin.Y);
+            Assert.Equal(0 + 22 + 0 - 4, origin.Z);
+        }
     }
 }

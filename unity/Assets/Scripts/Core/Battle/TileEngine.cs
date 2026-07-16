@@ -203,6 +203,65 @@ namespace OpenXcom.Core.Battle
             return VoxelHit.Empty(target);
         }
 
+        private static readonly int[] DirXShift = { 8, 14, 15, 15, 8, 1, 1, 1 };
+        private static readonly int[] DirYShift = { 1, 1, 8, 15, 15, 15, 8, 1 };
+
+        /// <summary>
+        /// 8-way compass sector (0=north, clockwise) from origin to target,
+        /// for arbitrary (non-adjacent) tiles - unlike Directions.IndexOf,
+        /// which only matches an exact single-step delta. Port of
+        /// TileEngine::getDirectionTo (src/Battlescape/TileEngine.cpp:5764-5806).
+        /// </summary>
+        public static int GetDirectionTo(Position origin, Position target)
+        {
+            double ox = target.X - origin.X;
+            double oy = target.Y - origin.Y;
+            double angle = System.Math.Atan2(ox, -oy);
+
+            double pie0 = System.Math.PI - System.Math.PI / 8.0;
+            double pie1 = System.Math.PI * 3.0 / 4.0 - System.Math.PI / 8.0;
+            double pie2 = System.Math.PI / 2.0 - System.Math.PI / 8.0;
+            double pie3 = System.Math.PI / 4.0 - System.Math.PI / 8.0;
+
+            if (angle > pie0 || angle < -pie0) return 4;
+            if (angle > pie1) return 3;
+            if (angle > pie2) return 2;
+            if (angle > pie3) return 1;
+            if (angle < -pie1) return 5;
+            if (angle < -pie2) return 6;
+            if (angle < -pie3) return 7;
+            return 0;
+        }
+
+        /// <summary>
+        /// The voxel a shot leaves the shooter's weapon from: the shooter's
+        /// tile origin, raised by body height and float height, adjusted
+        /// for terrain level, offset 4 voxel-units back from the muzzle, and
+        /// shifted sideways toward the target's direction (so the shot
+        /// visibly originates from roughly where the weapon is held, not the
+        /// tile's dead center). Port of TileEngine::getOriginVoxel
+        /// (src/Battlescape/TileEngine.cpp:5826-5900), scoped to this
+        /// rewrite's direct-fire-only, single-Z-level, size-1-unit,
+        /// CENTRE-relativeOrigin case: no BA_THROW/BA_LAUNCH offset, no
+        /// LEFT/RIGHT autofire-spread relativeOrigin variants (not modeled -
+        /// Phase 8 design spec §5), no tileAbove/NoFloor multi-level clamp
+        /// (CULTA00 is single-Z-level, matching every other phase's scope).
+        /// </summary>
+        public static Position GetOriginVoxel(TileGrid grid, BattleUnit shooter, Position targetTile)
+        {
+            var origin = shooter.Position;
+            var tile = grid[origin];
+            int terrainLevel = tile?.Floor?.TerrainLevel ?? 0;
+
+            int baseX = origin.X * 16;
+            int baseY = origin.Y * 16;
+            int baseZ = origin.Z * 24 - terrainLevel + shooter.Height + shooter.Rules.FloatHeight - 4;
+
+            int direction = GetDirectionTo(origin, targetTile);
+
+            return new Position(baseX + DirXShift[direction], baseY + DirYShift[direction], baseZ);
+        }
+
         /// <summary>Standard integer Bresenham line walk between two tile positions (z held constant at `from.Z`).</summary>
         private static IEnumerable<Position> WalkLine(Position from, Position to)
         {
