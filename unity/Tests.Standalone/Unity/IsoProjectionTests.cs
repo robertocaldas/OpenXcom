@@ -142,6 +142,28 @@ namespace OpenXcom.Core.Tests.Unity
         }
 
         [Fact]
+        public void VoxelWorldPosition_OneTileOriginVoxel_MatchesWorldPositionAtTheEquivalentTile()
+        {
+            // Voxel (16,16,24) is exactly tile (1,1,1)'s origin corner (16 voxel
+            // units/tile in X/Y, 24 in Z) - so VoxelWorldPosition at that voxel
+            // must equal WorldPosition at tile (1,1,1).
+            var (tileX, tileY) = IsoProjection.WorldPosition(1, 1, 1, pixelsPerUnit: 32f);
+            var (voxelX, voxelY) = IsoProjection.VoxelWorldPosition(16f, 16f, 24f, pixelsPerUnit: 32f);
+            Assert.Equal(tileX, voxelX, 3);
+            Assert.Equal(tileY, voxelY, 3);
+        }
+
+        [Fact]
+        public void VoxelWorldPosition_HalfTileVoxel_IsHalfwayBetweenTileOrigins()
+        {
+            var (x0, y0) = IsoProjection.VoxelWorldPosition(0f, 0f, 0f, pixelsPerUnit: 32f);
+            var (x1, y1) = IsoProjection.WorldPosition(1, 0, 0, pixelsPerUnit: 32f);
+            var (xHalf, yHalf) = IsoProjection.VoxelWorldPosition(8f, 0f, 0f, pixelsPerUnit: 32f);
+            Assert.Equal((x0 + x1) / 2f, xHalf, 3);
+            Assert.Equal((y0 + y1) / 2f, yHalf, 3);
+        }
+
+        [Fact]
         public void UnitSortingOrder_FitsWithinUnitySortingOrderInt16RangeForCulta00SizedGrids()
         {
             // Renderer.sortingOrder is stored internally as a 16-bit value even

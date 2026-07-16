@@ -376,6 +376,25 @@ namespace OpenXcom.Core.Tests
         }
 
         [Fact]
+        public void TryFire_ProjectileFiredEventCarriesTheWeaponUsed()
+        {
+            var (grid, state) = MakeOpenBattle(width: 25);
+            state.LoftData = FullTileLoftData();
+            var attacker = MakeGuaranteedHitAttacker(new Position(0, 0, 0));
+            var defender = MakeFullTileDefender(new Position(8, 0, 0), health: 100);
+            grid.At(0, 0, 0).Occupant = attacker;
+            grid.At(8, 0, 0).Occupant = defender;
+            for (int x = 0; x <= 8; x++) grid.At(x, 0, 0).Floor = new MapDataTile { StopLOS = false };
+            state.Units.Add(attacker);
+            state.Units.Add(defender);
+
+            state.TryFire(attacker, attacker.RightHand, BattleActionType.AimedShot, defender);
+
+            var fired = state.DequeueEvents().OfType<ProjectileFiredEvent>().Single();
+            Assert.Same(attacker.RightHand.Rules, fired.Weapon);
+        }
+
+        [Fact]
         public void TryFire_SetsAttackerDirectionToFaceTheDefender()
         {
             // NOTE: deviates from the plan brief, which built this grid via

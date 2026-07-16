@@ -30,6 +30,7 @@ namespace OpenXcom.Unity
     {
         [SerializeField] private Camera raycastCamera;
         [SerializeField] private float tilesPerSecond = 4f;
+        [SerializeField] private ProjectileView projectileView;
 
         private const float FiringPoseSeconds = 0.3f;
         private const float DeathSequenceSeconds = 0.6f;
@@ -333,6 +334,12 @@ namespace OpenXcom.Unity
                     Debug.Log(fired.Hit
                         ? $"{fired.Attacker.Name} hits {fired.Defender.Name}"
                         : $"{fired.Attacker.Name} misses {fired.Defender.Name}");
+
+                    if (projectileView != null && fired.Trajectory.Count >= 2)
+                        projectileView.Play(fired.Trajectory[0], fired.Trajectory[^1], fired.Weapon.BulletSprite);
+
+                    if (_unitTransforms.TryGetValue(fired.Attacker, out var shooterTransform))
+                        StartFiringPose(shooterTransform, fired.Attacker.Direction);
                 }
                 else if (evt is UnitHitEvent hitEvent)
                 {

@@ -194,7 +194,7 @@ namespace OpenXcom.Core.Battle
             var hitUnit = trace.Type == VoxelType.Unit ? trace.Unit : null;
             var shot = hitUnit != null ? Combat.ApplyDamage(Rng, attacker, weapon.Rules, hitUnit) : ShotResult.Miss;
 
-            Enqueue(new ProjectileFiredEvent(attacker, defender, shot.Hit, trajectory));
+            Enqueue(new ProjectileFiredEvent(attacker, defender, shot.Hit, trajectory, weapon.Rules));
 
             if (shot.Hit)
             {

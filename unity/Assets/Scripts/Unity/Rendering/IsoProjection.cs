@@ -72,6 +72,26 @@ namespace OpenXcom.Unity.Rendering
         }
 
         /// <summary>
+        /// Voxel-precision equivalent of WorldPosition, for animating along a
+        /// traced voxel path (Phase 8's ProjectileFiredEvent.Trajectory)
+        /// rather than snapping to tile centers. Voxel scale is 16 units/tile
+        /// in X/Y, 24 in Z (Phase 8 design spec §3) - divides down to
+        /// fractional tile coordinates, then applies the same MapToScreen
+        /// formula at float precision (MapToScreen itself stays int/tile-only,
+        /// since every other caller - tiles, units, cursor, path arrows -
+        /// only ever needs tile-precision placement).
+        /// </summary>
+        public static (float WorldX, float WorldY) VoxelWorldPosition(float voxelX, float voxelY, float voxelZ, float pixelsPerUnit)
+        {
+            float tileX = voxelX / 16f;
+            float tileY = voxelY / 16f;
+            float tileZ = voxelZ / 24f;
+            float screenX = (tileX - tileY) * (SpriteWidth / 2f);
+            float screenY = (tileX + tileY) * (SpriteWidth / 4f) - tileZ * ((SpriteHeight + SpriteWidth / 4f) / 2f);
+            return (screenX / pixelsPerUnit, -screenY / pixelsPerUnit);
+        }
+
+        /// <summary>
         /// Monotonic back-to-front sorting order for one tile-part, reproducing
         /// the C++ draw loop's Z-outer, Y-middle, X-inner nesting plus the
         /// floor/west/north/object per-tile order (Map.cpp:900-907, 939-1318).

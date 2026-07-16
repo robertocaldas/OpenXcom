@@ -43,13 +43,15 @@ namespace OpenXcom.Core.Battle
         public BattleUnit Defender { get; }
         public bool Hit { get; }
         public IReadOnlyList<Position> Trajectory { get; }
+        public RuleItem Weapon { get; }
 
-        public ProjectileFiredEvent(BattleUnit attacker, BattleUnit defender, bool hit, IReadOnlyList<Position> trajectory)
+        public ProjectileFiredEvent(BattleUnit attacker, BattleUnit defender, bool hit, IReadOnlyList<Position> trajectory, RuleItem weapon)
         {
             Attacker = attacker;
             Defender = defender;
             Hit = hit;
             Trajectory = trajectory;
+            Weapon = weapon;
         }
     }
 
