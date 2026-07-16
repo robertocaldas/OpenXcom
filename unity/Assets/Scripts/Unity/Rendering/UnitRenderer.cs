@@ -13,6 +13,14 @@ namespace OpenXcom.Unity.Rendering
     /// frame indices to Sprites and assigns them, makes no gameplay
     /// decisions - BattleController decides direction/walkPhase/isAiming
     /// from BattleState's events and calls SetFrame/SetDeathFrame here.
+    ///
+    /// [SIMPLIFIED] The held item always draws frontmost (UnitPartRank.Item
+    /// is always the highest-ranked, highest-sortingOrder part - see
+    /// IsoProjection.UnitSortingOrder), regardless of facing direction. The
+    /// real engine varies item-vs-body blit order per direction via an
+    /// explicit case-0..7 table (UnitSprite.cpp:607-640). Always-frontmost
+    /// is an acceptable cut for the two starter weapons this slice renders,
+    /// not a full per-direction z-order table.
     /// </summary>
     public sealed class UnitRenderer : MonoBehaviour
     {
@@ -114,6 +122,10 @@ namespace OpenXcom.Unity.Rendering
                     float offX = offsetItem ? UnitSpriteFrames.AimOffsetX[direction] / TileRenderer.PixelsPerUnit : 0f;
                     float offY = offsetItem ? -UnitSpriteFrames.AimOffsetY[direction] / TileRenderer.PixelsPerUnit : 0f;
                     _item.transform.localPosition = new Vector3(offX, offY, 0f);
+                }
+                else
+                {
+                    _item.enabled = false;
                 }
             }
             else

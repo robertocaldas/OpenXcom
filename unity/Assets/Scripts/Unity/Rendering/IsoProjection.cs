@@ -26,9 +26,11 @@ namespace OpenXcom.Unity.Rendering
         /// A unit's body-part draw rank, south-facing (direction 4) standing
         /// pose only - the back-to-front blit order UnitSprite.cpp's
         /// drawRoutine0 uses for direction 4 (UnitSprite.cpp:620):
-        /// legs, then right arm, then torso, then left arm. No held-item
-        /// layer this slice (HANDOB.PCK is not converted), so units render
-        /// unarmed even though they carry a weapon in game logic.
+        /// legs, then right arm, then torso, then left arm, then the held
+        /// item on top. The held-item layer (sourced from HANDOB.PCK,
+        /// converted since Phase 9 Task 2) is rendered whenever the unit
+        /// carries a weapon - see UnitRenderer.cs's Item SpriteRenderer,
+        /// added in Phase 9 Task 5.
         /// </summary>
         public enum UnitPartRank
         {
