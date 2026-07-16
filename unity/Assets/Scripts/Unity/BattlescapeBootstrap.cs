@@ -26,6 +26,7 @@ namespace OpenXcom.Unity
     [RequireComponent(typeof(BattleController))]
     [RequireComponent(typeof(TileCursorView))]
     [RequireComponent(typeof(PathPreviewView))]
+    [RequireComponent(typeof(ProjectileView))]
     public sealed class BattlescapeBootstrap : MonoBehaviour
     {
         private static readonly Position SoldierAPos = new(1, 1, 0);
@@ -33,18 +34,11 @@ namespace OpenXcom.Unity
         private static readonly Position SectoidAPos = new(8, 8, 0);
         private static readonly Position SectoidBPos = new(7, 8, 0);
 
-        /// <summary>
-        /// Unit .PCK raw frame indices for drawRoutine0's (soldiers,
-        /// Sectoids) standing pose, direction 4 = south / facing the camera
-        /// (UnitSprite.cpp:290-369,620; Pathfinding.h:220 for the direction
-        /// convention). Each part is a separate frame - there is no single
-        /// "standing soldier" frame in the raw sheet.
-        /// </summary>
+        /// <summary>Initial spawn facing: direction 4 = south / facing the
+        /// camera (UnitSprite.cpp:290-369,620; Pathfinding.h:220 for the
+        /// direction convention) - units turn freely once the battle starts
+        /// (BattleState.TryMove/TryFire), this is just the spawn pose.</summary>
         private const int SouthDirection = 4;
-        private const int LegsStandBase = 16;
-        private const int RightArmStandBase = 8;
-        private const int MaleTorsoBase = 32;
-        private const int LeftArmStandBase = 0;
 
         private void Start()
         {
@@ -57,19 +51,21 @@ namespace OpenXcom.Unity
 
             var xcomAtlas = AtlasLoader.Load(gameDataDir, "units-XCOM_0");
             var sectoidAtlas = AtlasLoader.Load(gameDataDir, "units-SECTOID");
+            var handobAtlas = AtlasLoader.Load(gameDataDir, "handob");
+            var bulletAtlas = AtlasLoader.Load(gameDataDir, "bulletsprites");
 
             var state = new BattleState(grid);
             state.LoftData = DataLoader.LoadLoftemps(gameDataDir);
             var unitTransforms = new Dictionary<BattleUnit, Transform>();
 
             Spawn(state, grid, unitTransforms, unitsById["STR_SOLDIER"], itemsById["STR_RIFLE"],
-                Faction.Player, "Soldier A", SoldierAPos, xcomAtlas);
+                Faction.Player, "Soldier A", SoldierAPos, xcomAtlas, handobAtlas);
             Spawn(state, grid, unitTransforms, unitsById["STR_SOLDIER"], itemsById["STR_RIFLE"],
-                Faction.Player, "Soldier B", SoldierBPos, xcomAtlas);
+                Faction.Player, "Soldier B", SoldierBPos, xcomAtlas, handobAtlas);
             Spawn(state, grid, unitTransforms, unitsById["STR_SECTOID_SOLDIER"], itemsById["STR_PLASMA_PISTOL"],
-                Faction.Hostile, "Sectoid A", SectoidAPos, sectoidAtlas);
+                Faction.Hostile, "Sectoid A", SectoidAPos, sectoidAtlas, handobAtlas);
             Spawn(state, grid, unitTransforms, unitsById["STR_SECTOID_SOLDIER"], itemsById["STR_PLASMA_PISTOL"],
-                Faction.Hostile, "Sectoid B", SectoidBPos, sectoidAtlas);
+                Faction.Hostile, "Sectoid B", SectoidBPos, sectoidAtlas, handobAtlas);
 
             GetComponent<BattleController>().Bind(state, unitTransforms);
 
@@ -78,16 +74,20 @@ namespace OpenXcom.Unity
 
             var pathAtlas = AtlasLoader.Load(gameDataDir, "pathfinding");
             GetComponent<PathPreviewView>().Setup(GetComponent<BattleController>(), state, pathAtlas);
+
+            GetComponent<ProjectileView>().Setup(bulletAtlas);
         }
 
         private void Spawn(BattleState state, OpenXcom.Core.Battle.TileGrid grid,
             Dictionary<BattleUnit, Transform> unitTransforms,
             RuleUnit ruleUnit, RuleItem weapon, Faction faction, string name, Position position,
-            (Texture2D texture, List<Rect> frameRects) atlas)
+            (Texture2D texture, List<Rect> frameRects) bodyAtlas,
+            (Texture2D texture, List<Rect> frameRects) itemAtlas)
         {
             var unit = new BattleUnit(ruleUnit, faction, name)
             {
                 Position = position,
+                Direction = SouthDirection,
                 RightHand = new BattleItem(weapon),
             };
             grid.At(position.X, position.Y, position.Z).Occupant = unit;
@@ -96,19 +96,10 @@ namespace OpenXcom.Unity
             var go = new GameObject(name);
             go.transform.SetParent(transform, worldPositionStays: false);
             var renderer = go.AddComponent<UnitRenderer>();
-            var legs = FrameSprite(atlas, LegsStandBase + SouthDirection);
-            var rightArm = FrameSprite(atlas, RightArmStandBase + SouthDirection);
-            var torso = FrameSprite(atlas, MaleTorsoBase + SouthDirection);
-            var leftArm = FrameSprite(atlas, LeftArmStandBase + SouthDirection);
-            renderer.Setup(position.X, position.Y, position.Z, grid.Width, grid.Length, legs, rightArm, torso, leftArm);
+            renderer.Setup(position.X, position.Y, position.Z, grid.Width, grid.Length, bodyAtlas, itemAtlas, weapon);
+            renderer.SetFrame(unit.Direction, walkPhase: -1, isAiming: false);
 
             unitTransforms[unit] = go.transform;
-        }
-
-        private static Sprite FrameSprite(
-            (Texture2D texture, List<Rect> frameRects) atlas, int frameIndex)
-        {
-            return Sprite.Create(atlas.texture, atlas.frameRects[frameIndex], new Vector2(0.5f, 0f), TileRenderer.PixelsPerUnit);
         }
     }
 }
