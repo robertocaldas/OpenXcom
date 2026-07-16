@@ -62,10 +62,10 @@ namespace OpenXcom.Unity
             public Transform Transform;
             public UnitRenderer Renderer;
             public Queue<Position> Queue;
+            public Vector3 SegmentStart;
             public Vector3 Target;
             public Position Previous;
             public int Direction;
-            public int WalkPhase;
         }
 
         private readonly List<UnitAnimation> _activeAnimations = new();
@@ -78,8 +78,7 @@ namespace OpenXcom.Unity
         private sealed class TimedSequence
         {
             public UnitRenderer Renderer;
-            public GameObject GameObjectToDeactivate; // null for firing-pose (nothing to deactivate)
-            public BattleUnit Unit; // set for death sequences, to remove from _unitTransforms on completion
+            public BattleUnit Unit; // set for death sequences (unused after StartDeathSequence already removed it from _unitTransforms - kept for clarity/future use)
             public float Elapsed;
             public float Duration;
             public int FrameCount;
@@ -103,19 +102,24 @@ namespace OpenXcom.Unity
 
         private void StartDeathSequence(BattleUnit unit, Transform deadTransform)
         {
+            // Corpses stay on the tile as a visible, inert body (matching the
+            // original game - a dead unit becomes a corpse item, not a puff of
+            // smoke) rather than vanishing. Only the collider is disabled, so
+            // clicks/hover pass through to the tile beneath instead of hitting
+            // an invisible-but-still-clickable dead unit.
+            if (deadTransform.TryGetComponent<BoxCollider>(out var collider))
+                collider.enabled = false;
+            _unitTransforms.Remove(unit);
+            if (_selected == unit)
+                _selected = null;
+
             if (!deadTransform.TryGetComponent<UnitRenderer>(out var renderer))
-            {
-                deadTransform.gameObject.SetActive(false);
-                _unitTransforms.Remove(unit);
-                if (_selected == unit)
-                    _selected = null;
                 return;
-            }
 
             renderer.SetDeathFrame(0);
             _timedSequences.Add(new TimedSequence
             {
-                Renderer = renderer, GameObjectToDeactivate = deadTransform.gameObject, Unit = unit,
+                Renderer = renderer, Unit = unit,
                 Elapsed = 0f, Duration = DeathSequenceSeconds, FrameCount = OpenXcom.Unity.Rendering.UnitSpriteFrames.DeathFrameCount, IsDeath = true,
             });
         }
@@ -137,17 +141,13 @@ namespace OpenXcom.Unity
                 if (t < 1f)
                     continue;
 
-                if (seq.IsDeath)
-                {
-                    seq.GameObjectToDeactivate.SetActive(false);
-                    _unitTransforms.Remove(seq.Unit);
-                    if (_selected == seq.Unit)
-                        _selected = null;
-                }
-                else
-                {
+                // Death sequences need no completion action beyond the final
+                // SetDeathFrame call above - StartDeathSequence already
+                // removed the unit from _unitTransforms/_selected up front,
+                // and the corpse's GameObject stays active (see
+                // StartDeathSequence's doc comment).
+                if (!seq.IsDeath)
                     seq.Renderer.SetFrame(seq.Direction, walkPhase: -1, isAiming: false);
-                }
                 _timedSequences.RemoveAt(i);
             }
         }
@@ -329,10 +329,10 @@ namespace OpenXcom.Unity
                         Transform = t,
                         Renderer = renderer,
                         Queue = new Queue<Position>(moved.Path),
+                        SegmentStart = t.localPosition,
                         Target = t.localPosition,
                         Previous = moved.From,
                         Direction = moved.Unit.Direction,
-                        WalkPhase = -1, // first dequeue below increments to 0
                     });
                 }
                 else if (evt is ProjectileFiredEvent fired)
@@ -402,16 +402,26 @@ namespace OpenXcom.Unity
                     // its first AI turn, regardless of what the player did -
                     // permanently unable to be right-click-targeted.
                     float depth = IsoProjection.UnitRaycastDepth(next.X, next.Y, next.Z, _state.Grid.Width, _state.Grid.Length);
+                    anim.SegmentStart = anim.Transform.localPosition;
                     anim.Target = new Vector3(worldX, worldY, depth);
-
                     anim.Direction = Directions.IndexOf(next - anim.Previous);
-                    anim.WalkPhase = (anim.WalkPhase + 1) % 8;
                     anim.Previous = next;
-                    anim.Renderer?.SetFrame(anim.Direction, anim.WalkPhase, isAiming: false);
                 }
 
                 anim.Transform.localPosition = Vector3.MoveTowards(
                     anim.Transform.localPosition, anim.Target, tilesPerSecond * Time.deltaTime);
+
+                // Walk phase is driven by how far across the CURRENT tile
+                // segment the unit has actually slid, not by wall-clock time
+                // or a once-per-tile jump - this is what keeps the walk cycle
+                // visually synced with movement regardless of tilesPerSecond's
+                // value (a once-per-dequeue phase bump left the sprite frozen
+                // on one frame for the whole tile crossing at low speeds).
+                float segmentLength = Vector3.Distance(anim.SegmentStart, anim.Target);
+                float remaining = Vector3.Distance(anim.Transform.localPosition, anim.Target);
+                float progress = segmentLength > 0.0001f ? 1f - remaining / segmentLength : 1f;
+                int walkPhase = Mathf.Min(7, (int)(progress * 8f));
+                anim.Renderer?.SetFrame(anim.Direction, walkPhase, isAiming: false);
             }
         }
     }
