@@ -121,5 +121,67 @@ namespace OpenXcom.Core.Tests
             startHealth = d.Health;
             return d;
         }
+
+        [Fact]
+        public void ApplyDeviation_HundredPercentAccuracyStaysCloseToTheAimPoint()
+        {
+            var rng = new Rng(42);
+            var origin = new Position(0, 0, 0);
+            var target = new Position(160, 0, 10); // 10 tiles away in X
+
+            for (int i = 0; i < 50; i++)
+            {
+                var deviated = Combat.ApplyDeviation(rng, origin, target, accuracyPercent: 100);
+                // Even at 100% accuracy the original's "miss cloud" tail (deviation
+                // computed from RNG(0,100)-100 landing exactly on 0) means this isn't
+                // always a perfect zero offset - assert it stays plausibly close, not exact.
+                Assert.InRange(System.Math.Abs(deviated.X - target.X), 0, 50);
+                Assert.InRange(System.Math.Abs(deviated.Y - target.Y), 0, 50);
+            }
+        }
+
+        [Fact]
+        public void ApplyDeviation_LowAccuracySpreadsFartherOnAverageThanHighAccuracy()
+        {
+            var rngLow = new Rng(7);
+            var rngHigh = new Rng(7);
+            var origin = new Position(0, 0, 0);
+            var target = new Position(320, 0, 10); // 20 tiles away
+
+            long lowTotal = 0, highTotal = 0;
+            const int trials = 200;
+            for (int i = 0; i < trials; i++)
+            {
+                var lowDev = Combat.ApplyDeviation(rngLow, origin, target, accuracyPercent: 20);
+                var highDev = Combat.ApplyDeviation(rngHigh, origin, target, accuracyPercent: 90);
+                lowTotal += System.Math.Abs(lowDev.X - target.X);
+                highTotal += System.Math.Abs(highDev.X - target.X);
+            }
+
+            Assert.True(lowTotal > highTotal,
+                $"expected low-accuracy average deviation ({lowTotal / (double)trials}) to exceed high-accuracy ({highTotal / (double)trials})");
+        }
+
+        [Fact]
+        public void ApplyDamage_AppliesArmorAndKillsWhenHealthReachesZero()
+        {
+            var rng = new Rng(1);
+            var attacker = MakeShooter();
+            var defender = MakeFreshDefender(out _);
+            defender.Health = 1;
+
+            var result = Combat.ApplyDamage(rng, attacker, RuleItem.Rifle, defender);
+
+            Assert.True(result.Hit);
+            Assert.True(result.Killed);
+            // No health-clamping exists anywhere in BattleUnit/Combat (IsAlive is
+            // simply Health > 0, matching original X-COM overkill behavior), so a
+            // 1-HP defender hit for more than 1 damage goes negative, not to exactly
+            // zero. Assert the real invariant (dead, and Health tracks the applied
+            // damage exactly) rather than an exact-zero value that depends on this
+            // roll happening to deal exactly 1 damage.
+            Assert.True(defender.Health <= 0);
+            Assert.Equal(1 - result.AppliedDamage, defender.Health);
+        }
     }
 }

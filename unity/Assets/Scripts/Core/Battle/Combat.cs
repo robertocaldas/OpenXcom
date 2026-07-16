@@ -73,6 +73,25 @@ namespace OpenXcom.Core.Battle
         }
 
         /// <summary>
+        /// Rolls and applies damage from `weapon` to `target`, mutating
+        /// target.Health. Does not roll to-hit - the caller has already
+        /// determined this shot connects, either via ResolveShot's classic
+        /// percent-chance roll or via a voxel trace in
+        /// BattleState.TryFire's Phase 8 path.
+        /// </summary>
+        public static ShotResult ApplyDamage(Rng rng, BattleUnit attacker, RuleItem weapon, BattleUnit target)
+        {
+            int rolled = RollDamage(rng, weapon);
+            var side = HitSide(attacker.Position, target.Position);
+            int armor = target.Armor.ValueFor(side);
+            int applied = Math.Max(0, rolled - armor);
+
+            target.Health -= applied;
+            bool killed = !target.IsAlive;
+            return new ShotResult(true, rolled, applied, killed);
+        }
+
+        /// <summary>
         /// Resolve a single projectile against a target unit: roll to hit, and on a
         /// hit roll and apply damage. Deterministic for a given <paramref name="rng"/>.
         /// </summary>
@@ -83,14 +102,39 @@ namespace OpenXcom.Core.Battle
             if (!rng.Percent(chance))
                 return ShotResult.Miss;
 
-            int rolled = RollDamage(rng, weapon.Rules);
-            var side = HitSide(attacker.Position, defender.Position);
-            int armor = defender.Armor.ValueFor(side);
-            int applied = Math.Max(0, rolled - armor);
+            return ApplyDamage(rng, attacker, weapon.Rules, defender);
+        }
 
-            defender.Health -= applied;
-            bool killed = !defender.IsAlive;
-            return new ShotResult(true, rolled, applied, killed);
+        /// <summary>
+        /// Aim-point scatter from an accuracy percent (0-100), operating in
+        /// voxel coordinates. Port of Projectile::applyAccuracy's "classic"
+        /// (non-uniform, Options::oxceUniformShootingSpread == false) branch
+        /// (src/Battlescape/Projectile.cpp:332-462). The C++ works in a
+        /// 0.0-1.0 accuracy fraction multiplied by 100; this takes the
+        /// already-0-100 percent HitChance uses directly, so
+        /// "accuracy*100" in the original becomes "accuracyPercent" here -
+        /// same formula, adapted scale. Does not model range-based accuracy
+        /// dropoff (Combat.HitChance already applies that before this is
+        /// called) or the OXCE uniform-spread toggle.
+        /// </summary>
+        public static Position ApplyDeviation(Rng rng, Position originVoxel, Position targetVoxel, int accuracyPercent)
+        {
+            int xDist = Math.Abs(originVoxel.X - targetVoxel.X);
+            int yDist = Math.Abs(originVoxel.Y - targetVoxel.Y);
+            int zDist = Math.Abs(originVoxel.Z - targetVoxel.Z);
+
+            int xyShift = (xDist / 2 <= yDist) ? xDist / 4 + yDist : (xDist + yDist) / 2;
+            int zShift = (xyShift <= zDist) ? xyShift / 2 + zDist : xyShift + zDist / 2;
+
+            int deviation = rng.Generate(0, 100) - accuracyPercent;
+            deviation += deviation >= 0 ? 50 : 10;
+            deviation = Math.Max(1, zShift * deviation / 200);
+
+            int dx = rng.Generate(0, deviation) - deviation / 2;
+            int dy = rng.Generate(0, deviation) - deviation / 2;
+            int dz = rng.Generate(0, deviation / 2) / 2 - deviation / 8;
+
+            return new Position(targetVoxel.X + dx, targetVoxel.Y + dy, targetVoxel.Z + dz);
         }
     }
 }
