@@ -29,6 +29,25 @@ namespace OpenXcom.Unity
 
         [SerializeField] private BattlescapeMapView mapView;
 
+        // How much of the map is visible at once, in world units (half-height
+        // of the camera's ortho view) - a fixed, resolution-INDEPENDENT
+        // constant, not derived from Screen.height. A first attempt computed
+        // this from Screen.height for a "native 1 texture pixel = 1 screen
+        // pixel" scale, but that goes the wrong way on a large/HiDPI display:
+        // more physical screen pixels means MORE world space fits at native
+        // scale, i.e. more zoomed OUT, not in (confirmed live: a 1156px-tall
+        // Editor Game view produced orthographicSize=33.75, showing the
+        // entire battlefield with units so small the game was described as
+        // "unplayable"). The original's zoomed-in, blocky-pixel-art look
+        // comes from being designed for a tiny 320x200 screen and simply
+        // upscaled on modern displays - not from matching native pixels 1:1
+        // on whatever screen happens to be running it. This value is tuned
+        // by eye (checked live via a scene-view-aligned capture showing
+        // ~2-3 tiles across dominating the view, matching how large units
+        // appear in the original) rather than derived from a formula -
+        // adjust in the Inspector if it still doesn't feel right.
+        [SerializeField] private float orthographicSize = 3f;
+
         private BattleController _battleController;
         private float _unitsPerSecond;
 
@@ -36,18 +55,9 @@ namespace OpenXcom.Unity
         {
             _unitsPerSecond = CameraScroll.UnitsPerSecond(ScrollSpeed, ScrollIntervalMs, TileRenderer.PixelsPerUnit);
 
-            // The scene's serialized orthographic size (5) was never
-            // recalibrated for a real display - it doesn't correspond to any
-            // particular native pixel scale, so sprites end up much smaller
-            // on screen than the original's crisp, blocky pixel art (which
-            // always renders at an integer multiple of 1 texture pixel = 1
-            // screen pixel). Computing it from Screen.height guarantees a
-            // native 1:1 scale (1 texture pixel = 1 screen pixel) on
-            // whatever resolution the Editor/build actually runs at, instead
-            // of a value tuned for one specific window size.
             var camera = GetComponent<Camera>();
             if (camera.orthographic)
-                camera.orthographicSize = Screen.height / (2f * TileRenderer.PixelsPerUnit);
+                camera.orthographicSize = orthographicSize;
         }
 
         private void Start()
