@@ -117,6 +117,7 @@ namespace OpenXcom.Core.Battle
 
             var walked = new List<Position>();
             var previous = unit.Position;
+            var startPosition = previous;
 
             foreach (var step in fullPath)
             {
@@ -125,6 +126,10 @@ namespace OpenXcom.Core.Battle
 
                 unit.Spend(step.StepCost);
                 Grid[previous].Occupant = null;
+                // Every Pathfinding step is exactly one of Directions.Offsets
+                // (Pathfinding.cs:92: neighbor = current + Directions.Offsets[dir]),
+                // so IndexOf here is never -1.
+                unit.Direction = Directions.IndexOf(step.Position - previous);
                 unit.Position = step.Position;
                 Grid[step.Position].Occupant = unit;
                 walked.Add(step.Position);
@@ -134,7 +139,7 @@ namespace OpenXcom.Core.Battle
             if (walked.Count == 0)
                 return new MoveResult { Outcome = MoveOutcome.Failed, Path = System.Array.Empty<Position>() };
 
-            Enqueue(new UnitMovedEvent(unit, walked));
+            Enqueue(new UnitMovedEvent(unit, startPosition, walked));
             var outcome = walked.Count == fullPath.Count ? MoveOutcome.Full : MoveOutcome.Partial;
             return new MoveResult { Outcome = outcome, Path = walked };
         }
@@ -167,6 +172,12 @@ namespace OpenXcom.Core.Battle
                 return new FireResult { Outcome = FireOutcome.InsufficientTu, Shot = ShotResult.Miss };
 
             attacker.Spend(tuCost);
+
+            // Face the defender before resolving the shot (parent design spec
+            // §2) - reuses Phase 8's own nearest-of-8 helper rather than a new
+            // one, since attacker-to-defender deltas are rarely an exact
+            // Directions.Offsets match the way adjacent movement steps are.
+            attacker.Direction = TileEngine.GetDirectionTo(attacker.Position, defender.Position);
 
             int accuracy = Combat.HitChance(attacker, weapon, action, defender.Position);
             var originVoxel = TileEngine.GetOriginVoxel(Grid, attacker, defender.Position);

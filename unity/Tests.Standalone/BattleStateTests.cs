@@ -86,7 +86,7 @@ namespace OpenXcom.Core.Tests
             var unit = new BattleUnit(RuleUnit.Soldier, Faction.Player);
 
             state.Enqueue(new TurnChangedEvent(Faction.Player));
-            state.Enqueue(new UnitMovedEvent(unit, new List<Position> { new(1, 0, 0) }));
+            state.Enqueue(new UnitMovedEvent(unit, new Position(0, 0, 0), new List<Position> { new(1, 0, 0) }));
 
             var drained = state.DequeueEvents();
 
@@ -181,6 +181,44 @@ namespace OpenXcom.Core.Tests
             Assert.Equal(MoveOutcome.Full, result.Outcome);
             Assert.Empty(result.Path);
             Assert.Empty(state.DequeueEvents()); // no-op move enqueues nothing
+        }
+
+        [Fact]
+        public void TryMove_EachStepSetsUnitDirectionAndEventCarriesTheStartPosition()
+        {
+            var grid = new TileGrid(5, 1, 1);
+            var floor = new MapDataTile { TuWalk = 4 };
+            for (int x = 0; x < 5; x++) grid.At(x, 0, 0).Floor = floor;
+
+            var unit = new BattleUnit(RuleUnit.Soldier, Faction.Player) { Position = new Position(0, 0, 0) };
+            unit.TimeUnits = 100;
+            grid.At(0, 0, 0).Occupant = unit;
+            var state = new BattleState(grid);
+            state.Units.Add(unit);
+
+            state.TryMove(unit, new Position(3, 0, 0)); // 3 steps east: direction 2 every step
+
+            Assert.Equal(2, unit.Direction);
+            var moved = Assert.IsType<UnitMovedEvent>(state.DequeueEvents()[0]);
+            Assert.Equal(new Position(0, 0, 0), moved.From);
+        }
+
+        [Fact]
+        public void TryMove_PartialMoveStillSetsDirectionForStepsActuallyWalked()
+        {
+            var grid = new TileGrid(5, 1, 1);
+            var floor = new MapDataTile { TuWalk = 4 };
+            for (int x = 0; x < 5; x++) grid.At(x, 0, 0).Floor = floor;
+
+            var unit = new BattleUnit(RuleUnit.Soldier, Faction.Player) { Position = new Position(0, 0, 0) };
+            unit.TimeUnits = 9; // enough for 2 steps only (see TryMove_InsufficientBudget... above)
+            grid.At(0, 0, 0).Occupant = unit;
+            var state = new BattleState(grid);
+            state.Units.Add(unit);
+
+            state.TryMove(unit, new Position(3, 0, 0));
+
+            Assert.Equal(2, unit.Direction); // still facing east after the 2 affordable steps
         }
     }
 }

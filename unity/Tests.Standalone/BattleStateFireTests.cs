@@ -374,5 +374,35 @@ namespace OpenXcom.Core.Tests
 
             Assert.True(state.IsBattleOver);
         }
+
+        [Fact]
+        public void TryFire_SetsAttackerDirectionToFaceTheDefender()
+        {
+            // NOTE: deviates from the plan brief, which built this grid via
+            // MakeOpenBattle(width: 25) (TileGrid(25, 1, 1)) and placed the
+            // defender at Y=3 - out of bounds for a Length=1 grid, so
+            // grid.At(5, 3, 0) would be null (NullReferenceException on
+            // .Occupant=) and ComputeVisibleTiles's y-loop (bounded by
+            // grid.Length) could never reach Y=3 regardless. Built the grid
+            // directly with Length=4 instead. Also dropped the brief's
+            // `grid.At(5, y, 0).Floor = new MapDataTile { StopLOS = false }`
+            // loop: Tile.BlocksSight (what LOS actually checks) is only ever
+            // derived from WestWall/NorthWall/Object.StopLOS inside
+            // MapGenerator (see MapGenerator.cs:38-40) - Floor.StopLOS is
+            // never read anywhere, and BlocksSight already defaults to
+            // false, so the loop was a no-op.
+            var grid = new TileGrid(10, 4, 1);
+            var state = new BattleState(grid) { LoftData = FullTileLoftData() };
+            var attacker = MakeGuaranteedHitAttacker(new Position(5, 0, 0));
+            var defender = MakeFullTileDefender(new Position(5, 3, 0), health: 100); // due south of attacker
+            grid.At(5, 0, 0).Occupant = attacker;
+            grid.At(5, 3, 0).Occupant = defender;
+            state.Units.Add(attacker);
+            state.Units.Add(defender);
+
+            state.TryFire(attacker, attacker.RightHand, BattleActionType.AimedShot, defender);
+
+            Assert.Equal(4, attacker.Direction); // south, matching TileEngine.GetDirectionTo's own citation-backed test
+        }
     }
 }

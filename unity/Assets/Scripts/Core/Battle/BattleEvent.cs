@@ -16,11 +16,13 @@ namespace OpenXcom.Core.Battle
     public sealed class UnitMovedEvent : BattleEvent
     {
         public BattleUnit Unit { get; }
+        public Position From { get; }
         public IReadOnlyList<Position> Path { get; }
 
-        public UnitMovedEvent(BattleUnit unit, IReadOnlyList<Position> path)
+        public UnitMovedEvent(BattleUnit unit, Position from, IReadOnlyList<Position> path)
         {
             Unit = unit;
+            From = from;
             Path = path;
         }
     }
