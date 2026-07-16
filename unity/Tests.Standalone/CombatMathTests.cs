@@ -163,6 +163,44 @@ namespace OpenXcom.Core.Tests
         }
 
         [Fact]
+        public void ExtendAimVoxel_ScalesAxisAlignedDirectionOutToMaxRange()
+        {
+            var origin = new Position(0, 0, 0);
+            var aim = new Position(10, 0, 0); // pure +X direction, length 10
+
+            var extended = Combat.ExtendAimVoxel(origin, aim, maxRange: 100);
+
+            Assert.Equal(100, extended.X);
+            Assert.Equal(0, extended.Y);
+            Assert.Equal(0, extended.Z);
+        }
+
+        [Fact]
+        public void ExtendAimVoxel_PreservesDirectionForADiagonalAim()
+        {
+            var origin = new Position(0, 0, 0);
+            var aim = new Position(3, 4, 0); // length 5 (3-4-5 right triangle)
+
+            var extended = Combat.ExtendAimVoxel(origin, aim, maxRange: 50);
+
+            // unit direction (3/5, 4/5, 0) * 50 = (30, 40, 0)
+            Assert.Equal(30, extended.X);
+            Assert.Equal(40, extended.Y);
+            Assert.Equal(0, extended.Z);
+        }
+
+        [Fact]
+        public void ExtendAimVoxel_ZeroLengthDirectionReturnsAimVoxelUnchanged()
+        {
+            var origin = new Position(5, 5, 5);
+            var aim = new Position(5, 5, 5); // same point as origin - no direction to extend along
+
+            var extended = Combat.ExtendAimVoxel(origin, aim);
+
+            Assert.Equal(aim, extended);
+        }
+
+        [Fact]
         public void ApplyDamage_AppliesArmorAndKillsWhenHealthReachesZero()
         {
             var rng = new Rng(1);

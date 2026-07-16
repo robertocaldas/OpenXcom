@@ -170,9 +170,12 @@ All-Core, fully unit-testable (`Tests.Standalone`, same discipline as Phase
   excluded; a line that grazes a corner (adjacent-tile diagonal case) is
   asserted against a known intervening-voxel set, not just a boolean —
   same discipline Phase 4 called out for its Bresenham walk.
-- Deviation: a 100%-accuracy shot has zero deviation (traces exactly to the
-  aim point); a low-accuracy shot's deviated point is bounded (doesn't wander
-  arbitrarily far) — assert against a seeded `Rng`, not real randomness.
+- Deviation: a 100%-accuracy shot's deviation is small (bounded near 1) but
+  never exactly zero, due to a rare edge case in the deviation formula (the
+  `deviation >= 0` branch can still fire on a 1-in-101 boundary roll even at
+  100% accuracy); a low-accuracy shot's deviated point is bounded (doesn't
+  wander arbitrarily far) — assert against a seeded `Rng`, not real
+  randomness.
 - `BattleState.TryFire`: a deviated miss that crosses another unit's tile
   damages *that* unit, not the original target (this is the core new
   behavior — needs an explicit test, since it didn't exist before); a clear

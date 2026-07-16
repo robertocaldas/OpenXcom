@@ -11,16 +11,18 @@ namespace OpenXcom.Core.Battle
         public readonly int RolledDamage;   // before armor
         public readonly int AppliedDamage;  // after armor, actually dealt
         public readonly bool Killed;
+        public readonly UnitSide Side;      // which armor side was hit (Front placeholder for a miss)
 
-        public ShotResult(bool hit, int rolled, int applied, bool killed)
+        public ShotResult(bool hit, int rolled, int applied, bool killed, UnitSide side)
         {
             Hit = hit;
             RolledDamage = rolled;
             AppliedDamage = applied;
             Killed = killed;
+            Side = side;
         }
 
-        public static ShotResult Miss => new(false, 0, 0, false);
+        public static ShotResult Miss => new(false, 0, 0, false, UnitSide.Front);
     }
 
     /// <summary>
@@ -88,12 +90,16 @@ namespace OpenXcom.Core.Battle
 
             target.Health -= applied;
             bool killed = !target.IsAlive;
-            return new ShotResult(true, rolled, applied, killed);
+            return new ShotResult(true, rolled, applied, killed, side);
         }
 
         /// <summary>
         /// Resolve a single projectile against a target unit: roll to hit, and on a
         /// hit roll and apply damage. Deterministic for a given <paramref name="rng"/>.
+        /// Kept as a tested library method for CombatMathTests.cs and any future
+        /// caller that wants the classic percent-roll behavior; not currently
+        /// called by BattleState.TryFire, which resolves hits via a voxel trace
+        /// and calls Combat.ApplyDamage directly instead.
         /// </summary>
         public static ShotResult ResolveShot(Rng rng, BattleUnit attacker, BattleItem weapon,
             BattleActionType action, BattleUnit defender)
@@ -135,6 +141,34 @@ namespace OpenXcom.Core.Battle
             int dz = rng.Generate(0, deviation / 2) / 2 - deviation / 8;
 
             return new Position(targetVoxel.X + dx, targetVoxel.Y + dy, targetVoxel.Z + dz);
+        }
+
+        /// <summary>
+        /// Extends a deviated aim point out to maxRange voxel units from origin, along
+        /// the same direction - so a miss doesn't just fall short of or beside the
+        /// target, it continues on to strike whatever lies behind it. Port of
+        /// Projectile::applyAccuracy's extendLine block (src/Battlescape/Projectile.cpp:463-478),
+        /// using vector normalize-and-scale instead of the C++'s equivalent
+        /// azimuth/elevation trig reconstruction - same result, simpler
+        /// implementation. maxRange default 16000 matches the C++'s hardcoded
+        /// "16*1000 // 1000 tiles" (Projectile.cpp:339), the maxRange used for all
+        /// direct-fire (non-BA_THROW/BA_LAUNCH) shots, which always pass
+        /// extendLine=true (Projectile.cpp:183,201).
+        /// </summary>
+        public static Position ExtendAimVoxel(Position origin, Position aimVoxel, int maxRange = 16000)
+        {
+            double dx = aimVoxel.X - origin.X;
+            double dy = aimVoxel.Y - origin.Y;
+            double dz = aimVoxel.Z - origin.Z;
+            double length = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+            if (length < 0.0001)
+                return aimVoxel; // zero-length direction (origin == aimVoxel); nothing meaningful to extend
+
+            double scale = maxRange / length;
+            return new Position(
+                origin.X + (int)(dx * scale),
+                origin.Y + (int)(dy * scale),
+                origin.Z + (int)(dz * scale));
         }
     }
 }

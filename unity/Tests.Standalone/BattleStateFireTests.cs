@@ -23,9 +23,13 @@ namespace OpenXcom.Core.Tests
             return unit;
         }
 
-        // Firing=0 -> HitChance is always 0 -> Rng.Percent(0) is always
-        // false (Rng.cs: chance<=0 always misses), deterministic regardless
-        // of seed.
+        // Firing=0 keeps this attacker's HitChance at 0, but that alone no
+        // longer guarantees a miss - TryFire resolves hits via a real voxel
+        // trace (TileEngine.CalculateLine), not a Rng.Percent(chance) roll.
+        // The actual guaranteed-miss mechanism here is MakeOpenBattle()
+        // never setting LoftData: TileEngine.VoxelCheck treats every voxel
+        // as passable against an empty LoftData array, so the trace never
+        // finds a hit regardless of accuracy.
         private static BattleUnit MakeGuaranteedMissAttacker(Position pos)
         {
             var stats = new UnitStats { TimeUnits = 50, Health = 100, Firing = 0 };
@@ -276,6 +280,42 @@ namespace OpenXcom.Core.Tests
             Assert.Equal(targetHealthBefore, intendedTarget.Health); // intended target untouched
             var fired = System.Linq.Enumerable.OfType<ProjectileFiredEvent>(events).Single();
             Assert.Same(intendedTarget, fired.Defender); // event still records who was aimed at
+        }
+
+        [Fact]
+        public void TryFire_ShotContinuesPastTheAimedAtPointAndHitsWhatsBehindIt()
+        {
+            // Wide grid so there's real room "behind" the aimed-at tile to place a wall.
+            var grid = new TileGrid(50, 5, 1);
+            var state = new BattleState(grid) { LoftData = FullTileLoftData() };
+            var attacker = new BattleUnit(RuleUnit.Soldier, Faction.Player) { Position = new Position(0, 0, 0) };
+
+            // A far wall well beyond the aimed-at tile's range (tile 3) but within maxRange.
+            var farWall = new MapDataTile { Loft = new int[12] };
+            for (int i = 0; i < 12; i++) farWall.Loft[i] = 1;
+            grid.At(20, 0, 0).Object = farWall;
+
+            // aimedAt exists only to give TryFire a Position/LOS/TU target - deliberately NOT
+            // placed in the grid's Occupant slot, so the ray finds nothing solid at its own
+            // range and must continue past it to hit anything - proving the extend-line fix,
+            // not re-testing the existing near-hit case (already covered by other TryFire tests).
+            var aimedAt = new BattleUnit(new RuleUnit("PHANTOM", UnitStats.Rookie, FullTileArmor(), standHeight: 23, kneelHeight: 23), Faction.Hostile)
+            {
+                Position = new Position(3, 0, 0),
+            };
+            state.Units.Add(attacker);
+            state.Units.Add(aimedAt);
+            var weapon = new BattleItem(RuleItem.Rifle);
+            attacker.RightHand = weapon;
+
+            var result = state.TryFire(attacker, weapon, BattleActionType.Snapshot, aimedAt);
+            var events = state.DequeueEvents();
+
+            var fired = events.OfType<ProjectileFiredEvent>().Single();
+            // Reaches at least tile 20's near voxel edge (20*16=320) - would be ~48-64
+            // (tile 3's range) without the extend-line fix.
+            Assert.True(fired.Trajectory.Last().X >= 320,
+                $"expected trajectory to reach past X=320 (tile 20), got X={fired.Trajectory.Last().X}");
         }
 
         [Fact]

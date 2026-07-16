@@ -144,10 +144,12 @@ namespace OpenXcom.Core.Battle
         /// line of sight (TileEngine.ComputeVisibleTiles) and TU budget, in
         /// that order. Once both gates pass, TU is spent immediately and the
         /// shot's accuracy is converted into a deviated aim voxel
-        /// (Combat.ApplyDeviation) which is then traced through real
-        /// geometry (TileEngine.CalculateLine) - the trace's actual hit
-        /// (terrain, `defender`, or a different unit caught in the deviated
-        /// path) is what takes damage, not necessarily `defender` itself.
+        /// (Combat.ApplyDeviation), then extended out to max range along
+        /// that same direction (Combat.ExtendAimVoxel) before being traced
+        /// through real geometry (TileEngine.CalculateLine) - the trace's
+        /// actual hit (terrain, `defender`, a different unit caught in the
+        /// deviated path, or something behind `defender` on a miss) is what
+        /// takes damage, not necessarily `defender` itself.
         /// A kill clears the hit unit's tile occupancy synchronously (no
         /// death-animation state machine this phase). Always enqueues one
         /// ProjectileFiredEvent when a shot is actually fired (hit or miss),
@@ -173,8 +175,9 @@ namespace OpenXcom.Core.Battle
                 defender.Position.Y * 16 + 8,
                 defender.Position.Z * 24 + defender.Height / 2);
             var aimVoxel = Combat.ApplyDeviation(Rng, originVoxel, targetVoxel, accuracy);
+            var extendedAimVoxel = Combat.ExtendAimVoxel(originVoxel, aimVoxel);
 
-            var trace = TileEngine.CalculateLine(Grid, LoftData, originVoxel, aimVoxel, attacker);
+            var trace = TileEngine.CalculateLine(Grid, LoftData, originVoxel, extendedAimVoxel, attacker);
             var trajectory = new List<Position> { originVoxel, trace.Voxel };
 
             var hitUnit = trace.Type == VoxelType.Unit ? trace.Unit : null;
@@ -184,8 +187,7 @@ namespace OpenXcom.Core.Battle
 
             if (shot.Hit)
             {
-                var side = Combat.HitSide(attacker.Position, hitUnit.Position);
-                Enqueue(new UnitHitEvent(hitUnit, shot.AppliedDamage, side));
+                Enqueue(new UnitHitEvent(hitUnit, shot.AppliedDamage, shot.Side));
 
                 if (shot.Killed)
                 {
