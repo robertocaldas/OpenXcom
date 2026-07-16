@@ -96,6 +96,8 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Equal(35, rifle.TuAuto);
             Assert.Equal(30, rifle.Power);       // from STR_RIFLE_CLIP
             Assert.Equal(1, rifle.DamageType);   // from STR_RIFLE_CLIP
+            Assert.Equal(0, rifle.HandSprite);
+            Assert.Equal(70, rifle.BulletSprite); // raw bulletSprite=2 * 35 (RuleItem.cpp:353 loadSpriteOffset multiplier)
 
             var pistol = RuleYamlDecoder.LoadWeapon(
                 Path.Combine(RulesDir, "items.rul"), "STR_PLASMA_PISTOL", "STR_PLASMA_PISTOL_CLIP");
@@ -110,6 +112,8 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Equal(30, pistol.TuAuto);
             Assert.Equal(52, pistol.Power);      // from STR_PLASMA_PISTOL_CLIP
             Assert.Equal(5, pistol.DamageType);  // from STR_PLASMA_PISTOL_CLIP
+            Assert.Equal(104, pistol.HandSprite);
+            Assert.Equal(280, pistol.BulletSprite); // raw bulletSprite=8 * 35
         }
     }
 }

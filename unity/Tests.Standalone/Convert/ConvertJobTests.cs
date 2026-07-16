@@ -40,13 +40,17 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Contains(written, p => p == "icons.frames.json");
             Assert.Contains(written, p => p == "pathfinding.png");
             Assert.Contains(written, p => p == "pathfinding.frames.json");
+            Assert.Contains(written, p => p == "handob.png");
+            Assert.Contains(written, p => p == "handob.frames.json");
+            Assert.Contains(written, p => p == "bulletsprites.png");
+            Assert.Contains(written, p => p == "bulletsprites.frames.json");
             Assert.True(File.Exists(Path.Combine(outDir, "manifest.json")));
 
-            Assert.Equal(27, written.Count);
+            Assert.Equal(31, written.Count);
             var manifestJson = File.ReadAllText(Path.Combine(outDir, "manifest.json"));
             var manifest = Newtonsoft.Json.Linq.JObject.Parse(manifestJson);
             var files = manifest["files"].Select(t => t.ToString()).ToList();
-            Assert.Equal(27, files.Count);
+            Assert.Equal(31, files.Count);
 
             // icons.png: single 320x56 frame (no companion .TAB on disk).
             var iconsFramesJson = File.ReadAllText(Path.Combine(outDir, "icons.frames.json"));

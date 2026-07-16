@@ -50,6 +50,8 @@ namespace Xcom.Convert.Decoders
         public int TuSnap;
         public int TuAimed;
         public int TuAuto;
+        public int HandSprite;
+        public int BulletSprite;
     }
 
     /// <summary>
@@ -103,6 +105,13 @@ namespace Xcom.Convert.Decoders
             };
         }
 
+        /// <summary>
+        /// Reads a weapon plus its clip's power/damageType, and the weapon's
+        /// own handSprite/bulletSprite (RuleItem.h:390) - bulletSprite is
+        /// stored already multiplied by 35 (RuleItem.cpp:352-353's
+        /// loadSpriteOffset(..., "Projectiles", 35)), matching the real
+        /// engine's actual atlas base-offset value, not the raw .rul number.
+        /// </summary>
         public static ConvertedItem LoadWeapon(string itemsRulPath, string weaponTypeId, string clipTypeId)
         {
             var file = Deserializer.Deserialize<RawItemsFile>(File.ReadAllText(itemsRulPath));
@@ -122,6 +131,8 @@ namespace Xcom.Convert.Decoders
                 TuSnap = weapon.TuSnap,
                 TuAimed = weapon.TuAimed,
                 TuAuto = weapon.TuAuto,
+                HandSprite = weapon.HandSprite,
+                BulletSprite = weapon.BulletSprite * 35,
             };
         }
 
@@ -203,6 +214,8 @@ namespace Xcom.Convert.Decoders
             public int TuAuto { get; set; }
             public int Power { get; set; }
             public int DamageType { get; set; }
+            public int HandSprite { get; set; }
+            public int BulletSprite { get; set; }
         }
 
         private sealed class RawItemsFile

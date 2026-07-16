@@ -129,6 +129,33 @@ namespace Xcom.Convert
             written.Add("pathfinding.png");
             written.Add("pathfinding.frames.json");
 
+            // 3f. HANDOB.PCK: weapon-in-hand sprites (Rifle handSprite=0,
+            // Plasma Pistol handSprite=104 - both fit inside this set's 128
+            // frames), same 32x40 PckDecoder/AtlasWriter pipeline as
+            // XCOM_0.PCK/SECTOID.PCK above (UnitSprite.cpp:96-99 selectItem).
+            var handobFrames = PckDecoder.Load(
+                File.ReadAllBytes(Path.Combine(dataDir, "UNITS", "HANDOB.PCK")),
+                File.ReadAllBytes(Path.Combine(dataDir, "UNITS", "HANDOB.TAB")), 32, 40);
+            var handobAtlas = AtlasWriter.Build(handobFrames, pal);
+            AtlasWriter.Save(handobAtlas,
+                Path.Combine(outDir, "handob.png"),
+                Path.Combine(outDir, "handob.frames.json"));
+            written.Add("handob.png");
+            written.Add("handob.frames.json");
+
+            // 3g. BulletSprites.png: bullet-trail dot sheet (bin/standard/xcom1's
+            // own extraSprites.rul "Projectiles" entry, RuleItem.cpp:352-353),
+            // 105x33 8-bit indexed PNG, 35 cols x 11 rows of 3x3 frames - same
+            // indexed-PNG colorkey handling GridSpriteSheet.Convert already
+            // applies to Pathfinding.png.
+            GridSpriteSheet.Convert(
+                Path.Combine(rulesDir, "Resources", "BulletSprites", "BulletSprites.png"),
+                Path.Combine(outDir, "bulletsprites.png"),
+                Path.Combine(outDir, "bulletsprites.frames.json"),
+                frameWidth: 3, frameHeight: 3, columns: 35, rows: 11);
+            written.Add("bulletsprites.png");
+            written.Add("bulletsprites.frames.json");
+
             // 4. Mapblock CULTA00: .MAP + .RMP -> one JSON.
             var block = MapBlockDecoder.LoadMap(
                 File.ReadAllBytes(Path.Combine(dataDir, "MAPS", "CULTA00.MAP")));
