@@ -146,7 +146,11 @@ namespace OpenXcom.Core.Tests.Unity
         {
             // Voxel (16,16,24) is exactly tile (1,1,1)'s origin corner (16 voxel
             // units/tile in X/Y, 24 in Z) - so VoxelWorldPosition at that voxel
-            // must equal WorldPosition at tile (1,1,1).
+            // must equal WorldPosition at tile (1,1,1). Deliberately NOT a
+            // literal port of Camera::convertVoxelToScreen (see the method's
+            // doc comment) - this project's own bottom/near-diamond-tip anchor
+            // convention (every sprite uses pivot 0.5,0) has no equivalent of
+            // the C++ formula's blit-corner-to-center recentering constant.
             var (tileX, tileY) = IsoProjection.WorldPosition(1, 1, 1, pixelsPerUnit: 32f);
             var (voxelX, voxelY) = IsoProjection.VoxelWorldPosition(16f, 16f, 24f, pixelsPerUnit: 32f);
             Assert.Equal(tileX, voxelX, 3);

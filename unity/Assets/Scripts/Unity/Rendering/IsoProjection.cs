@@ -74,12 +74,24 @@ namespace OpenXcom.Unity.Rendering
         /// <summary>
         /// Voxel-precision equivalent of WorldPosition, for animating along a
         /// traced voxel path (Phase 8's ProjectileFiredEvent.Trajectory)
-        /// rather than snapping to tile centers. Voxel scale is 16 units/tile
-        /// in X/Y, 24 in Z (Phase 8 design spec §3) - divides down to
-        /// fractional tile coordinates, then applies the same MapToScreen
-        /// formula at float precision (MapToScreen itself stays int/tile-only,
-        /// since every other caller - tiles, units, cursor, path arrows -
-        /// only ever needs tile-precision placement).
+        /// rather than snapping to tile centers. Deliberately NOT a literal
+        /// port of Camera::convertVoxelToScreen (Camera.cpp:487-498): that
+        /// C++ formula recenters from convertMapToScreen's raw output via a
+        /// fixed +spriteWidth/2,+spriteHeight/2 constant because the
+        /// original blits a sprite's TOP-LEFT corner there (SDL convention).
+        /// This project's own convention is different and already
+        /// established (TileRenderer's floor diamond, every unit sprite):
+        /// every consumer of WorldPosition/MapToScreen treats its output as
+        /// a tile's BOTTOM/near diamond-tip anchor (pivot 0.5,0 on every
+        /// sprite in this codebase), not a blit corner - porting the C++
+        /// recentering constant on top of that mismatched convention placed
+        /// a voxel's projected point BELOW a unit's own anchor instead of
+        /// above it (confirmed live: a shot's origin voxel, roughly chest
+        /// height, projected lower than the shooter's own feet). Voxel
+        /// coordinates are therefore treated as plain fractional tile
+        /// coordinates and fed through the exact same formula MapToScreen
+        /// uses at float precision - consistent with how every other point
+        /// in this project's coordinate system already behaves.
         /// </summary>
         public static (float WorldX, float WorldY) VoxelWorldPosition(float voxelX, float voxelY, float voxelZ, float pixelsPerUnit)
         {
