@@ -244,7 +244,7 @@ namespace OpenXcom.Core.Battle
         /// rewrite's direct-fire-only, single-Z-level, size-1-unit,
         /// CENTRE-relativeOrigin case: no BA_THROW/BA_LAUNCH offset, no
         /// LEFT/RIGHT autofire-spread relativeOrigin variants (not modeled -
-        /// Phase 8 design spec §5), no tileAbove/NoFloor multi-level clamp
+        /// Phase 8 design spec §7), no tileAbove/NoFloor multi-level clamp
         /// (CULTA00 is single-Z-level, matching every other phase's scope).
         /// </summary>
         public static Position GetOriginVoxel(TileGrid grid, BattleUnit shooter, Position targetTile)

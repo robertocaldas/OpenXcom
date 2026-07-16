@@ -378,6 +378,15 @@ namespace OpenXcom.Core.Tests
             Assert.Equal(2, TileEngine.GetDirectionTo(origin, new Position(10, 5, 0))); // east
             Assert.Equal(4, TileEngine.GetDirectionTo(origin, new Position(5, 10, 0))); // south
             Assert.Equal(6, TileEngine.GetDirectionTo(origin, new Position(0, 5, 0)));  // west
+
+            // Diagonal branches. angle = atan2(ox, -oy), pie3 = pi/8 ~= 0.3927,
+            // pie2 = 3pi/8 ~= 1.178, pie1 = 5pi/8 ~= 1.963, pie0 = 7pi/8 ~= 2.749.
+            // dir 1's range is (pie3, pie2], dir 3's is (pie1, pie0],
+            // dir 5's is (-pie0, -pie1), dir 7's is (-pie2, -pie3).
+            Assert.Equal(1, TileEngine.GetDirectionTo(origin, new Position(10, 0, 0)));  // NE: ox=5,oy=-5, angle=atan2(5,5)=pi/4~=0.785, in (pie3,pie2]
+            Assert.Equal(3, TileEngine.GetDirectionTo(origin, new Position(10, 10, 0))); // SE: ox=5,oy=5, angle=atan2(5,-5)=3pi/4~=2.356, in (pie1,pie0]
+            Assert.Equal(5, TileEngine.GetDirectionTo(origin, new Position(0, 10, 0)));  // SW: ox=-5,oy=5, angle=atan2(-5,-5)=-3pi/4~=-2.356, in (-pie0,-pie1)
+            Assert.Equal(7, TileEngine.GetDirectionTo(origin, new Position(0, 0, 0)));   // NW: ox=-5,oy=-5, angle=atan2(-5,5)=-pi/4~=-0.785, in (-pie2,-pie3)
         }
 
         [Fact]
