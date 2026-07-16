@@ -309,5 +309,65 @@ namespace OpenXcom.Core.Tests
             Assert.InRange(hit.Voxel.X, 16, 31);
             Assert.InRange(hit.Voxel.Y, 16, 31);
         }
+
+        [Fact]
+        public void CalculateLine_YDominantLineSwapsXyAndStopsAtASolidTileOnItsPath()
+        {
+            // |deltaY|=32 > |deltaX|=0 triggers the swapXy branch inside
+            // CalculateLine. Origin and target share X=8,Z=10 (tile x=0,z=0)
+            // and only Y varies, walking straight through tile row
+            // (0,0,0) -> (0,1,0) -> (0,2,0). None of the other CalculateLine
+            // tests have |deltaY| > |deltaX|, so this is the only coverage
+            // of the swap-then-unswap-per-point logic on the Y axis.
+            var grid = new TileGrid(3, 3, 1);
+            grid.At(0, 1, 0).Object = SolidPart(); // tile y=1 -> voxel Y range [16,32)
+
+            var origin = new Position(8, 8, 10);
+            var target = new Position(8, 40, 10);
+
+            var hit = TileEngine.CalculateLine(grid, SolidLoftData(), origin, target, excludeUnit: null);
+
+            Assert.Equal(VoxelType.Object, hit.Type);
+            Assert.InRange(hit.Voxel.Y, 16, 31);
+        }
+
+        [Fact]
+        public void CalculateLine_ZDominantLineSwapsXzAndXyAndStopsAtASolidTileOnItsPath()
+        {
+            // deltaX=0, deltaY=16, deltaZ=40: |deltaZ| > |deltaX| and
+            // |deltaZ| > |deltaY| makes Z the dominant axis, but deltaY > deltaX
+            // ALSO triggers swapXy on top of swapXz - unlike a pure
+            // deltaY=0 Z-dominant line (where swapXy's condition,
+            // |deltaY| > |deltaX|, is 0 > 0 = false and only swapXz ever
+            // fires), this is the only CalculateLine test where both un-swaps
+            // apply to the same call. That matters: the two un-swap lines in
+            // CheckPoint are independent ifs, so when only one of them is
+            // ever true, their relative order is unobservable and a bug that
+            // swaps that order would slip past every other test in this
+            // file - it only shows up when both fire together, exactly as
+            // here.
+            //
+            // Hand-simulated the integer Bresenham drift (deltaX=40,
+            // deltaY=0, deltaZ=16 after both axis swaps; driftXz starts at
+            // 20 and decrements by 16 each of the 40 outer-loop steps,
+            // carrying the +40 wraparound on underflow): world Y first
+            // reaches 16 (tile y=1) while world Z is still 23 (tile z=0,
+            // not solid), then world Z reaches 24 (tile z=1) on the very
+            // next step while world Y is still 16 (tile y=1) - so the first
+            // hit against a solid tile at (0,1,1) lands at world voxel
+            // (8, 16, 24).
+            var grid = new TileGrid(3, 3, 2);
+            grid.At(0, 1, 1).Object = SolidPart(); // tile (x=0,y=1,z=1) -> voxel X [0,15], Y [16,31], Z [24,47]
+
+            var origin = new Position(8, 8, 5);
+            var target = new Position(8, 24, 45);
+
+            var hit = TileEngine.CalculateLine(grid, SolidLoftData(), origin, target, excludeUnit: null);
+
+            Assert.Equal(VoxelType.Object, hit.Type);
+            Assert.InRange(hit.Voxel.X, 0, 15);
+            Assert.InRange(hit.Voxel.Y, 16, 31);
+            Assert.InRange(hit.Voxel.Z, 24, 47);
+        }
     }
 }
