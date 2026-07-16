@@ -13,11 +13,26 @@ namespace OpenXcom.Unity
     /// OpenXcom.Core.Battle.BattleState.TryMove - this class only translates
     /// mouse clicks into calls on it and drains/animates the resulting
     /// BattleEvents. Makes no gameplay decisions of its own.
+    ///
+    /// Walk-phase stepping and the firing-pose/death animations deliberately
+    /// use two different mechanisms. Walk-phase must stay locked to actual
+    /// tile arrival (a gameplay-visual sync requirement - the frame must
+    /// change exactly when the unit visually reaches each tile, not on a
+    /// fixed timer that could drift out of sync with tilesPerSecond), so it's
+    /// driven by the existing per-tile Queue.Dequeue() point in
+    /// AdvanceAnimations. Firing-pose-hold and the death sequence are both
+    /// genuinely time-boxed ("show this pose/sequence for N seconds then
+    /// revert/finish") with no positional trigger, so they share one small
+    /// timed-sequence mechanism (see TimedSequence/AdvanceTimedSequences)
+    /// instead of a third bespoke timer.
     /// </summary>
     public sealed class BattleController : MonoBehaviour
     {
         [SerializeField] private Camera raycastCamera;
         [SerializeField] private float tilesPerSecond = 4f;
+
+        private const float FiringPoseSeconds = 0.3f;
+        private const float DeathSequenceSeconds = 0.6f;
 
         private BattleState _state;
         private BattleUnit _selected;
@@ -44,11 +59,97 @@ namespace OpenXcom.Unity
         private sealed class UnitAnimation
         {
             public Transform Transform;
+            public UnitRenderer Renderer;
             public Queue<Position> Queue;
             public Vector3 Target;
+            public Position Previous;
+            public int Direction;
+            public int WalkPhase;
         }
 
         private readonly List<UnitAnimation> _activeAnimations = new();
+
+        /// <summary>Shared timer for the two genuinely duration-based
+        /// animations (firing-pose hold, death sequence) - unlike walk-phase
+        /// stepping (position-driven, see the class doc comment), both of
+        /// these are "hold/step for N seconds then settle," so they share one
+        /// mechanism instead of two near-identical ad hoc timers.</summary>
+        private sealed class TimedSequence
+        {
+            public UnitRenderer Renderer;
+            public GameObject GameObjectToDeactivate; // null for firing-pose (nothing to deactivate)
+            public BattleUnit Unit; // set for death sequences, to remove from _unitTransforms on completion
+            public float Elapsed;
+            public float Duration;
+            public int FrameCount;
+            public bool IsDeath;
+            public int Direction; // firing-pose revert direction
+        }
+
+        private readonly List<TimedSequence> _timedSequences = new();
+
+        private void StartFiringPose(Transform shooterTransform, int direction)
+        {
+            if (!shooterTransform.TryGetComponent<UnitRenderer>(out var renderer))
+                return;
+
+            renderer.SetFrame(direction, walkPhase: -1, isAiming: true);
+            _timedSequences.Add(new TimedSequence
+            {
+                Renderer = renderer, Elapsed = 0f, Duration = FiringPoseSeconds, FrameCount = 1, IsDeath = false, Direction = direction,
+            });
+        }
+
+        private void StartDeathSequence(BattleUnit unit, Transform deadTransform)
+        {
+            if (!deadTransform.TryGetComponent<UnitRenderer>(out var renderer))
+            {
+                deadTransform.gameObject.SetActive(false);
+                _unitTransforms.Remove(unit);
+                if (_selected == unit)
+                    _selected = null;
+                return;
+            }
+
+            renderer.SetDeathFrame(0);
+            _timedSequences.Add(new TimedSequence
+            {
+                Renderer = renderer, GameObjectToDeactivate = deadTransform.gameObject, Unit = unit,
+                Elapsed = 0f, Duration = DeathSequenceSeconds, FrameCount = OpenXcom.Unity.Rendering.UnitSpriteFrames.DeathFrameCount, IsDeath = true,
+            });
+        }
+
+        private void AdvanceTimedSequences()
+        {
+            for (int i = _timedSequences.Count - 1; i >= 0; i--)
+            {
+                var seq = _timedSequences[i];
+                seq.Elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(seq.Elapsed / seq.Duration);
+
+                if (seq.IsDeath)
+                {
+                    int phase = Mathf.Min(seq.FrameCount - 1, (int)(t * seq.FrameCount));
+                    seq.Renderer.SetDeathFrame(phase);
+                }
+
+                if (t < 1f)
+                    continue;
+
+                if (seq.IsDeath)
+                {
+                    seq.GameObjectToDeactivate.SetActive(false);
+                    _unitTransforms.Remove(seq.Unit);
+                    if (_selected == seq.Unit)
+                        _selected = null;
+                }
+                else
+                {
+                    seq.Renderer.SetFrame(seq.Direction, walkPhase: -1, isAiming: false);
+                }
+                _timedSequences.RemoveAt(i);
+            }
+        }
 
         /// <summary>Wires this controller to an already-populated battle. Called by whichever scene bootstrap owns squad setup.</summary>
         public void Bind(BattleState state, IReadOnlyDictionary<BattleUnit, Transform> unitTransforms)
@@ -73,6 +174,7 @@ namespace OpenXcom.Unity
         private void Update()
         {
             UpdateHover();
+            AdvanceTimedSequences();
 
             if (_activeAnimations.Count > 0)
             {
@@ -214,11 +316,16 @@ namespace OpenXcom.Unity
             {
                 if (evt is UnitMovedEvent moved && _unitTransforms.TryGetValue(moved.Unit, out var t))
                 {
+                    t.TryGetComponent<UnitRenderer>(out var renderer);
                     _activeAnimations.Add(new UnitAnimation
                     {
                         Transform = t,
+                        Renderer = renderer,
                         Queue = new Queue<Position>(moved.Path),
                         Target = t.localPosition,
+                        Previous = moved.From,
+                        Direction = moved.Unit.Direction,
+                        WalkPhase = -1, // first dequeue below increments to 0
                     });
                 }
                 else if (evt is ProjectileFiredEvent fired)
@@ -233,10 +340,7 @@ namespace OpenXcom.Unity
                 }
                 else if (evt is UnitDiedEvent died && _unitTransforms.TryGetValue(died.Unit, out var deadTransform))
                 {
-                    deadTransform.gameObject.SetActive(false);
-                    _unitTransforms.Remove(died.Unit);
-                    if (_selected == died.Unit)
-                        _selected = null;
+                    StartDeathSequence(died.Unit, deadTransform);
                 }
                 else if (evt is TurnChangedEvent turnChanged)
                 {
@@ -257,6 +361,7 @@ namespace OpenXcom.Unity
 
                 if (anim.Queue.Count == 0 && Vector3.Distance(anim.Transform.localPosition, anim.Target) < 0.01f)
                 {
+                    anim.Renderer?.SetFrame(anim.Direction, walkPhase: -1, isAiming: false);
                     _activeAnimations.RemoveAt(i);
                     continue;
                 }
@@ -277,6 +382,11 @@ namespace OpenXcom.Unity
                     // permanently unable to be right-click-targeted.
                     float depth = IsoProjection.UnitRaycastDepth(next.X, next.Y, next.Z, _state.Grid.Width, _state.Grid.Length);
                     anim.Target = new Vector3(worldX, worldY, depth);
+
+                    anim.Direction = Directions.IndexOf(next - anim.Previous);
+                    anim.WalkPhase = (anim.WalkPhase + 1) % 8;
+                    anim.Previous = next;
+                    anim.Renderer?.SetFrame(anim.Direction, anim.WalkPhase, isAiming: false);
                 }
 
                 anim.Transform.localPosition = Vector3.MoveTowards(
