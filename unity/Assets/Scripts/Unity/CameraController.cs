@@ -35,6 +35,19 @@ namespace OpenXcom.Unity
         private void Awake()
         {
             _unitsPerSecond = CameraScroll.UnitsPerSecond(ScrollSpeed, ScrollIntervalMs, TileRenderer.PixelsPerUnit);
+
+            // The scene's serialized orthographic size (5) was never
+            // recalibrated for a real display - it doesn't correspond to any
+            // particular native pixel scale, so sprites end up much smaller
+            // on screen than the original's crisp, blocky pixel art (which
+            // always renders at an integer multiple of 1 texture pixel = 1
+            // screen pixel). Computing it from Screen.height guarantees a
+            // native 1:1 scale (1 texture pixel = 1 screen pixel) on
+            // whatever resolution the Editor/build actually runs at, instead
+            // of a value tuned for one specific window size.
+            var camera = GetComponent<Camera>();
+            if (camera.orthographic)
+                camera.orthographicSize = Screen.height / (2f * TileRenderer.PixelsPerUnit);
         }
 
         private void Start()
