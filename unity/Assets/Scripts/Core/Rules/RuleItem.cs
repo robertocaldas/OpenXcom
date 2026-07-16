@@ -37,6 +37,19 @@ namespace OpenXcom.Core.Rules
         public int UpperLimit { get; init; } = 200; // effectively no upper limit
         public int LowerLimit { get; init; } = 0;
 
+        /// <summary>Base frame index into the hand-sprite atlas (HANDOB.PCK) for
+        /// this weapon held at direction 0; add direction (0-7) to get the
+        /// actual frame. Port of RuleItem::getHandSprite (RuleItem.h:390,
+        /// RuleItem.cpp:1128-ish; used at UnitSprite.cpp:96-99).</summary>
+        public int HandSprite { get; init; }
+
+        /// <summary>Base frame index into the bullet-trail atlas
+        /// (BulletSprites.png / the "Projectiles" surface set) for this
+        /// weapon's shots, already multiplied by the 35-frames-per-projectile
+        /// stride (RuleItem.cpp:352-353's loadSpriteOffset(..., "Projectiles",
+        /// 35); see Xcom.Convert.Decoders.RuleYamlDecoder.LoadWeapon).</summary>
+        public int BulletSprite { get; init; }
+
         public RuleItem(string id)
         {
             Id = id;

@@ -196,7 +196,8 @@ namespace OpenXcom.Core.Tests
             string json = @"[{
                 ""Id"": ""STR_RIFLE"", ""TwoHanded"": true, ""Power"": 30, ""DamageType"": 1,
                 ""AccuracySnap"": 60, ""AccuracyAimed"": 110, ""AccuracyAuto"": 35,
-                ""TuSnap"": 25, ""TuAimed"": 80, ""TuAuto"": 35
+                ""TuSnap"": 25, ""TuAimed"": 80, ""TuAuto"": 35,
+                ""HandSprite"": 0, ""BulletSprite"": 70
             }]";
             File.WriteAllText(Path.Combine(_dir, "items.json"), json);
 
@@ -210,6 +211,8 @@ namespace OpenXcom.Core.Tests
             Assert.Equal(DamageType.Armor, rifle.DamageType); // raw rul value 1; Combat.cs doesn't branch on DamageType, so this is a label only
             Assert.Equal(110, rifle.AccuracyAimed);
             Assert.Equal(80, rifle.TuAimed);
+            Assert.Equal(0, rifle.HandSprite);
+            Assert.Equal(70, rifle.BulletSprite);
         }
     }
 }

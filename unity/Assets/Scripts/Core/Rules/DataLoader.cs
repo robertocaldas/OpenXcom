@@ -133,6 +133,8 @@ namespace OpenXcom.Core.Rules
                     TuSnap = r.TuSnap,
                     TuAimed = r.TuAimed,
                     TuAuto = r.TuAuto,
+                    HandSprite = r.HandSprite,
+                    BulletSprite = r.BulletSprite,
                 });
             }
             return result;
@@ -247,6 +249,8 @@ namespace OpenXcom.Core.Rules
             public int TuSnap { get; set; }
             public int TuAimed { get; set; }
             public int TuAuto { get; set; }
+            public int HandSprite { get; set; }
+            public int BulletSprite { get; set; }
         }
 
         private static int[] ToIntArray(byte[] bytes)
