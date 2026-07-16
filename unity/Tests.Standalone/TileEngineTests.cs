@@ -234,6 +234,25 @@ namespace OpenXcom.Core.Tests
         }
 
         [Fact]
+        public void CalculateLine_RayExitingTheMapStopsAtTheBoundaryInsteadOfContinuingToAFarTarget()
+        {
+            // A deviated miss gets extended out to Combat.ExtendAimVoxel's
+            // maxRange (16000 voxel units, Phase 8) - for a small map like
+            // this 3-tile-wide grid (voxel bounds X 0-47), that target sits
+            // vastly outside the map. The trace must stop where the ray
+            // actually exits the map (voxel X=48, the first invalid tile),
+            // not continue all the way to the far target.
+            var grid = new TileGrid(3, 3, 1);
+            var origin = new Position(8, 8, 10);
+            var target = new Position(8000, 8, 10);
+
+            var hit = TileEngine.CalculateLine(grid, System.Array.Empty<ushort>(), origin, target, excludeUnit: null);
+
+            Assert.Equal(VoxelType.OutOfBounds, hit.Type);
+            Assert.InRange(hit.Voxel.X, 48, 60);
+        }
+
+        [Fact]
         public void CalculateLine_SolidWallOnThePathStopsBeforeTheTarget()
         {
             var grid = new TileGrid(3, 3, 1);

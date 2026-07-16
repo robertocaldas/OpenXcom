@@ -286,7 +286,17 @@ namespace OpenXcom.Core.Tests
         public void TryFire_ShotContinuesPastTheAimedAtPointAndHitsWhatsBehindIt()
         {
             // Wide grid so there's real room "behind" the aimed-at tile to place a wall.
-            var grid = new TileGrid(50, 5, 1);
+            // Modest Y/Z headroom for the deviation's small angular jitter -
+            // NOT for a Z slope, which must be near-zero (see the phantom's
+            // standHeight below): now that CalculateLine correctly stops the
+            // instant a ray exits the map (the CalculateLine_RayExiting... fix),
+            // a shot with any real downward/upward slope drives Z negative (or
+            // past the top) well before a long extension reaches a distant
+            // wall - this bit a first version of this test that left the
+            // phantom's standHeight at 23 (Height/2=11 vs the origin's Z=18,
+            // an 7-unit-over-41-X-units downward slope that, extended,
+            // crossed Z=0 around X=133, long before the wall at X=320).
+            var grid = new TileGrid(50, 10, 3);
             var state = new BattleState(grid) { LoftData = FullTileLoftData() };
             var attacker = new BattleUnit(RuleUnit.Soldier, Faction.Player) { Position = new Position(0, 0, 0) };
 
@@ -299,7 +309,11 @@ namespace OpenXcom.Core.Tests
             // placed in the grid's Occupant slot, so the ray finds nothing solid at its own
             // range and must continue past it to hit anything - proving the extend-line fix,
             // not re-testing the existing near-hit case (already covered by other TryFire tests).
-            var aimedAt = new BattleUnit(new RuleUnit("PHANTOM", UnitStats.Rookie, FullTileArmor(), standHeight: 23, kneelHeight: 23), Faction.Hostile)
+            // standHeight: 36 makes Height/2 (18) match the origin voxel's own Z (18 -
+            // Soldier.Height(22) - 4, see TileEngine.GetOriginVoxel) almost exactly, so
+            // the pre-deviation aim line is level - a real slope, even a small one,
+            // compounds hugely over this shot's 16000-voxel-unit extension.
+            var aimedAt = new BattleUnit(new RuleUnit("PHANTOM", UnitStats.Rookie, FullTileArmor(), standHeight: 36, kneelHeight: 36), Faction.Hostile)
             {
                 Position = new Position(3, 0, 0),
             };

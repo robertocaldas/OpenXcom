@@ -34,7 +34,17 @@ namespace OpenXcom.Core.Battle
 
         public static VoxelHit Empty(Position voxel) => new(VoxelType.Empty, voxel);
 
-        /// <summary>True for any real hit (terrain or unit) - false for Empty/OutOfBounds.</summary>
-        public bool IsHit => Type != VoxelType.Empty && Type != VoxelType.OutOfBounds;
+        /// <summary>True for anything that should stop a trace: a real hit
+        /// (terrain or unit) OR the ray exiting the map - false only for
+        /// Empty (still-passable air). Mirrors the real engine's own stop
+        /// condition (TileEngine::calculateLineVoxel, TileEngine.cpp:4376,
+        /// checks `result != V_EMPTY`, meaning V_OUTOFBOUNDS stops the trace
+        /// same as any real hit). Excluding OutOfBounds from this (an earlier
+        /// version of this property did) let CalculateLine's loop keep
+        /// stepping straight through the map's edge all the way to a fully
+        /// extended miss target - possibly thousands of voxel units past the
+        /// actual map - instead of stopping where the ray actually left the
+        /// map.</summary>
+        public bool IsHit => Type != VoxelType.Empty;
     }
 }
