@@ -285,6 +285,12 @@ namespace OpenXcom.Unity
             DrainAndAnimate();
         }
 
+        /// <summary>True if transform currently has a pending/in-progress walk
+        /// animation - used to skip starting a firing pose for a unit that's
+        /// still mid-walk in the same drain batch (see the ProjectileFiredEvent
+        /// branch in DrainAndAnimate).</summary>
+        private bool IsAnimating(Transform t) => _activeAnimations.Exists(a => a.Transform == t);
+
         private BattleUnit FindUnitAt(Transform hitTransform)
         {
             foreach (var kv in _unitTransforms)
@@ -338,7 +344,15 @@ namespace OpenXcom.Unity
                     if (projectileView != null && fired.Trajectory.Count >= 2)
                         projectileView.Play(fired.Trajectory[0], fired.Trajectory[^1], fired.Weapon.BulletSprite);
 
-                    if (_unitTransforms.TryGetValue(fired.Attacker, out var shooterTransform))
+                    // Skip the firing pose entirely for a unit that still has
+                    // a pending walk animation in this same drain batch (the
+                    // common AI case: approach then shoot in one turn, all
+                    // events drained together) - AdvanceAnimations would just
+                    // overwrite the aim pose with a walk frame on the very
+                    // next tick, and the pose's timed revert could otherwise
+                    // snap the unit to a standing frame mid-slide.
+                    if (_unitTransforms.TryGetValue(fired.Attacker, out var shooterTransform)
+                        && !IsAnimating(shooterTransform))
                         StartFiringPose(shooterTransform, fired.Attacker.Direction);
                 }
                 else if (evt is UnitHitEvent hitEvent)
