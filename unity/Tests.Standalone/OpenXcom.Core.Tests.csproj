@@ -18,6 +18,8 @@
     <Compile Include="../Assets/Scripts/Unity/Rendering/CameraScroll.cs" />
     <!-- Pure-math path preview helper: no UnityEngine dependency, testable here. -->
     <Compile Include="../Assets/Scripts/Unity/Rendering/PathPreview.cs" />
+    <!-- Pure-math unit sprite frame-index helper: no UnityEngine dependency, testable here. -->
+    <Compile Include="../Assets/Scripts/Unity/Rendering/UnitSpriteFrames.cs" />
   </ItemGroup>
 
   <ItemGroup>
