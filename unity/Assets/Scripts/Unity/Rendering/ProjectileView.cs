@@ -17,7 +17,7 @@ namespace OpenXcom.Unity.Rendering
     /// </summary>
     public sealed class ProjectileView : MonoBehaviour
     {
-        private const float FlightSeconds = 0.25f;
+        [SerializeField] private float flightSeconds = 0.4f;
 
         private (Texture2D texture, List<Rect> frameRects) _atlas;
         private SpriteRenderer _dot;
@@ -66,7 +66,7 @@ namespace OpenXcom.Unity.Rendering
                 return;
 
             _elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(_elapsed / FlightSeconds);
+            float t = Mathf.Clamp01(_elapsed / flightSeconds);
             _dot.transform.position = Vector3.Lerp(_from, _to, t);
 
             if (t >= 1f)

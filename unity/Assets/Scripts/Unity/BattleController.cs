@@ -38,11 +38,15 @@ namespace OpenXcom.Unity
     public sealed class BattleController : MonoBehaviour
     {
         [SerializeField] private Camera raycastCamera;
-        [SerializeField] private float tilesPerSecond = 4f;
+        // Slower than the original default (4) - now that AI actions play
+        // sequentially (one unit's whole action finishes before the next
+        // starts, see the class doc comment), a fast tilesPerSecond makes
+        // every step of a multi-unit turn fly by too quickly to actually
+        // see, reported directly as "everything is too fast."
+        [SerializeField] private float tilesPerSecond = 2f;
         [SerializeField] private ProjectileView projectileView;
-
-        private const float FiringPoseSeconds = 0.3f;
-        private const float DeathSequenceSeconds = 0.6f;
+        [SerializeField] private float firingPoseSeconds = 0.6f;
+        [SerializeField] private float deathSequenceSeconds = 1f;
 
         private BattleState _state;
         private BattleUnit _selected;
@@ -116,7 +120,7 @@ namespace OpenXcom.Unity
             renderer.SetFrame(direction, walkPhase: -1, isAiming: true);
             _timedSequences.Add(new TimedSequence
             {
-                Renderer = renderer, Elapsed = 0f, Duration = FiringPoseSeconds, FrameCount = 1, IsDeath = false, Direction = direction,
+                Renderer = renderer, Elapsed = 0f, Duration = firingPoseSeconds, FrameCount = 1, IsDeath = false, Direction = direction,
             });
         }
 
@@ -147,7 +151,7 @@ namespace OpenXcom.Unity
             _timedSequences.Add(new TimedSequence
             {
                 Renderer = renderer, Unit = unit,
-                Elapsed = 0f, Duration = DeathSequenceSeconds, FrameCount = OpenXcom.Unity.Rendering.UnitSpriteFrames.DeathFrameCount, IsDeath = true,
+                Elapsed = 0f, Duration = deathSequenceSeconds, FrameCount = OpenXcom.Unity.Rendering.UnitSpriteFrames.DeathFrameCount, IsDeath = true,
             });
         }
 
