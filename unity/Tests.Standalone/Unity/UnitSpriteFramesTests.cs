@@ -124,5 +124,31 @@ namespace OpenXcom.Core.Tests.Unity
             Assert.Equal(new[] { 8, 10, 7, 4, -9, -11, -7, -3 }, UnitSpriteFrames.AimOffsetX);
             Assert.Equal(new[] { -6, -3, 0, 2, 0, -4, -7, -9 }, UnitSpriteFrames.AimOffsetY);
         }
+
+        [Fact]
+        public void HeldItemYOffset_SoldierHeightUnit_IsANoOp()
+        {
+            // A unit whose StandHeight matches the reference (22, a real
+            // Soldier's own StandHeight) gets zero offset - the default
+            // human squad's rifle position is unaffected by this port.
+            Assert.Equal(0, UnitSpriteFrames.HeldItemYOffset(22));
+        }
+
+        [Fact]
+        public void HeldItemYOffset_ShorterUnit_IsPositiveSdlPixelsDown()
+        {
+            // Sectoid's real converted StandHeight (bin/standard/xcom1/units.rul:167,
+            // STR_SECTOID_SOLDIER) is 16 - UnitSprite.cpp:585's
+            // (soldierHeight - standHeight) = 22-16 = 6 SDL pixels further
+            // down the screen (positive), matching AimOffsetY's own
+            // SDL-pixel-space, Y-down convention.
+            Assert.Equal(6, UnitSpriteFrames.HeldItemYOffset(16));
+        }
+
+        [Fact]
+        public void HeldItemYOffset_TallerUnit_IsNegative()
+        {
+            Assert.Equal(-3, UnitSpriteFrames.HeldItemYOffset(25));
+        }
     }
 }

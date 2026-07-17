@@ -24,21 +24,6 @@ namespace OpenXcom.Unity.Rendering
     /// </summary>
     public sealed class UnitRenderer : MonoBehaviour
     {
-        // NOT a port - HANDOB.PCK's item art is positioned within its 32x40
-        // canvas assuming a human-height hand (same canvas convention as the
-        // XCOM_0 body atlas, where it lines up correctly). A short race like
-        // the Sectoid doesn't fill anywhere near that much of ITS OWN 32x40
-        // canvas, so the item's (correctly-computed, un-offset) position
-        // renders well above/outside the alien's actual visible body,
-        // reading as "floating, disconnected from the body" - confirmed live
-        // (reported directly by the user, reproduced and inspected across 4
-        // directions). The real C++ engine applies no equivalent correction
-        // for one-handed items (offX/offY there are aiming+two-handed only,
-        // UnitSprite.cpp:446-500) and has no cited per-race calibration to
-        // port instead, so this is an empirical downward nudge tuned by eye
-        // against a live capture, not a value derived from the source.
-        private const float OneHandedItemYOffset = -0.3f;
-
         private SpriteRenderer _legs;
         private SpriteRenderer _rightArm;
         private SpriteRenderer _torso;
@@ -49,6 +34,7 @@ namespace OpenXcom.Unity.Rendering
         private (Texture2D texture, List<Rect> frameRects) _bodyAtlas;
         private (Texture2D texture, List<Rect> frameRects)? _itemAtlas;
         private RuleItem _heldWeapon;
+        private int _standHeight;
 
         private void Awake()
         {
@@ -77,15 +63,19 @@ namespace OpenXcom.Unity.Rendering
 
         /// <summary>Positions/sorts this unit and stores the atlases/weapon
         /// used by every later SetFrame call. Does not itself pick a frame -
-        /// call SetFrame right after Setup to render the initial pose.</summary>
+        /// call SetFrame right after Setup to render the initial pose.
+        /// standHeight is the unit's RuleUnit.StandHeight, used to correct
+        /// held-item vertical position for races shorter/taller than the
+        /// soldier-height HANDOB art assumes (UnitSpriteFrames.HeldItemYOffset).</summary>
         public void Setup(int x, int y, int z, int mapWidth, int mapLength,
             (Texture2D texture, List<Rect> frameRects) bodyAtlas,
             (Texture2D texture, List<Rect> frameRects)? itemAtlas,
-            RuleItem heldWeapon)
+            RuleItem heldWeapon, int standHeight)
         {
             _bodyAtlas = bodyAtlas;
             _itemAtlas = itemAtlas;
             _heldWeapon = heldWeapon;
+            _standHeight = standHeight;
 
             var (worldX, worldY) = IsoProjection.WorldPosition(x, y, z, TileRenderer.PixelsPerUnit);
             float depth = IsoProjection.UnitRaycastDepth(x, y, z, mapWidth, mapLength);
@@ -136,10 +126,12 @@ namespace OpenXcom.Unity.Rendering
                     // is applied as-is while the Y offset is negated to match.
                     float offX = offsetItem ? UnitSpriteFrames.AimOffsetX[direction] / TileRenderer.PixelsPerUnit : 0f;
                     float offY = offsetItem ? -UnitSpriteFrames.AimOffsetY[direction] / TileRenderer.PixelsPerUnit : 0f;
-                    // See OneHandedItemYOffset's doc comment - a one-handed
-                    // item needs this regardless of direction/aiming state.
-                    if (!twoHanded)
-                        offY += OneHandedItemYOffset;
+                    // Height compensation (UnitSpriteFrames.HeldItemYOffset,
+                    // ported from UnitSprite.cpp:577-585) applies
+                    // unconditionally, one- or two-handed, on top of any
+                    // aiming offset - same SDL-pixel-space, Y-down convention
+                    // as AimOffsetY, so negated the same way.
+                    offY += -UnitSpriteFrames.HeldItemYOffset(_standHeight) / TileRenderer.PixelsPerUnit;
                     _item.transform.localPosition = new Vector3(offX, offY, 0f);
                 }
                 else

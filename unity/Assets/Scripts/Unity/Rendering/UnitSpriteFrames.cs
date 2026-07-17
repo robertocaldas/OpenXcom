@@ -88,5 +88,24 @@ namespace OpenXcom.Unity.Rendering
         /// applying as a Unity local-position offset.</summary>
         public static readonly int[] AimOffsetX = { 8, 10, 7, 4, -9, -11, -7, -3 };
         public static readonly int[] AimOffsetY = { -6, -3, 0, 2, 0, -4, -7, -9 };
+
+        /// <summary>HANDOB item art is authored assuming a standard soldier's
+        /// standing height (UnitSprite.cpp:290's local `soldierHeight`
+        /// constant). Reference height for HeldItemYOffset below.</summary>
+        public const int ReferenceStandHeight = 22;
+
+        /// <summary>Held-item Y offset (SDL pixel units, positive = further
+        /// down the screen - divide by TileRenderer.PixelsPerUnit and negate
+        /// for a Unity local-position offset, matching AimOffsetY's own
+        /// convention) for a unit whose actual StandHeight differs from the
+        /// soldier-height HANDOB art assumes. Port of UnitSprite.cpp:577-585:
+        /// "items are calculated for soldier height (22) - some aliens are
+        /// smaller, so item is drawn lower" - applied unconditionally
+        /// (both one- and two-handed, standing or walking), added on top of
+        /// any aiming offset, using the unit's StandHeight even while
+        /// kneeled (the C++ calls getStandHeight() here, not getHeight()).
+        /// A soldier-height unit (22) gets 0 - this is a no-op for the
+        /// default human squad, only visibly nudging shorter/taller races.</summary>
+        public static int HeldItemYOffset(int standHeight) => ReferenceStandHeight - standHeight;
     }
 }

@@ -96,7 +96,7 @@ namespace OpenXcom.Unity
             var go = new GameObject(name);
             go.transform.SetParent(transform, worldPositionStays: false);
             var renderer = go.AddComponent<UnitRenderer>();
-            renderer.Setup(position.X, position.Y, position.Z, grid.Width, grid.Length, bodyAtlas, itemAtlas, weapon);
+            renderer.Setup(position.X, position.Y, position.Z, grid.Width, grid.Length, bodyAtlas, itemAtlas, weapon, ruleUnit.StandHeight);
             renderer.SetFrame(unit.Direction, walkPhase: -1, isAiming: false);
 
             unitTransforms[unit] = go.transform;
