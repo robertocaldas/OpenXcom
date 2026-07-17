@@ -153,6 +153,20 @@ namespace OpenXcom.Unity.Rendering
             _legs.sprite = FrameSprite(_bodyAtlas, UnitSpriteFrames.DeathFrame(phase));
         }
 
+        /// <summary>Overrides the (only remaining visible, post-SetDeathFrame)
+        /// legs layer's sorting order - used to drop a corpse down to
+        /// tile-level (Object-rank) order instead of the usual unit-band
+        /// order (see BattleController.StartDeathSequence). A corpse now
+        /// persists indefinitely (it no longer despawns), so a live unit can
+        /// walk onto/through the same tile - IsoProjection.UnitSortingOrder's
+        /// own doc comment assumes "no two units ever share a tileIndex,"
+        /// which a lingering corpse plus a live unit on the same tile
+        /// violates, tying their sort order and leaving draw order
+        /// undefined. Object-rank keeps the corpse visible above the tile's
+        /// own floor/walls while guaranteeing it renders behind any live
+        /// unit on the same tile.</summary>
+        public void SetSortingOrder(int order) => _legs.sortingOrder = order;
+
         private static Sprite FrameSprite((Texture2D texture, List<Rect> frameRects) atlas, int frameIndex) =>
             Sprite.Create(atlas.texture, atlas.frameRects[frameIndex], new Vector2(0.5f, 0f), TileRenderer.PixelsPerUnit);
     }

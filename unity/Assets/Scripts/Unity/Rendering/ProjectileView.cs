@@ -25,6 +25,12 @@ namespace OpenXcom.Unity.Rendering
         private Vector3 _from;
         private Vector3 _to;
 
+        /// <summary>True while a bullet-trail animation is in flight - read
+        /// by BattleController to sequence AI-turn events one at a time
+        /// (don't start the next unit's action until this one's bullet has
+        /// finished, not just the firing pose).</summary>
+        public bool IsPlaying => _elapsed >= 0f;
+
         private void Awake()
         {
             var go = new GameObject("Bullet");

@@ -25,6 +25,15 @@ namespace OpenXcom.Unity
     /// revert/finish") with no positional trigger, so they share one small
     /// timed-sequence mechanism (see TimedSequence/AdvanceTimedSequences)
     /// instead of a third bespoke timer.
+    ///
+    /// Events drain into a queue and start ONE AT A TIME, not all at once:
+    /// BattleState.EndPlayerTurn runs the AI's ENTIRE hostile turn
+    /// synchronously in Core (every living hostile unit's full move+shoot),
+    /// producing a whole batch of events in one go. Starting all of their
+    /// animations immediately would play every alien's move/shot
+    /// simultaneously instead of one after another like the original -
+    /// ProcessPendingEvents only promotes the next queued event once
+    /// nothing from the previous one is still animating.
     /// </summary>
     public sealed class BattleController : MonoBehaviour
     {
@@ -52,11 +61,13 @@ namespace OpenXcom.Unity
         /// every Update() by UpdateHover.</summary>
         public BattleUnit HoveredUnit { get; private set; }
 
-        /// <summary>One unit's in-progress walk animation. A turn can move
-        /// several units (e.g. the AI's hostile turn), so this is a list, not
-        /// a single slot - a single-slot design silently clobbers all but the
-        /// last unit's animation whenever more than one UnitMovedEvent is
-        /// drained in the same call.</summary>
+        /// <summary>One unit's in-progress walk animation. Kept as a list
+        /// rather than a single slot even though sequential event processing
+        /// (see the class doc comment) now guarantees at most one entry is
+        /// ever active at a time - a single-slot design previously silently
+        /// clobbered one unit's animation with another's before events were
+        /// sequenced, and a list costs nothing extra to keep that guarantee
+        /// from being silently re-broken if this ever changes.</summary>
         private sealed class UnitAnimation
         {
             public Transform Transform;
@@ -88,6 +99,15 @@ namespace OpenXcom.Unity
 
         private readonly List<TimedSequence> _timedSequences = new();
 
+        /// <summary>Events drained from BattleState but not yet started -
+        /// see the class doc comment on why events start one at a time
+        /// instead of all together.</summary>
+        private readonly Queue<BattleEvent> _pendingEvents = new();
+
+        private bool IsAnythingAnimating() =>
+            _activeAnimations.Count > 0 || _timedSequences.Count > 0
+            || (projectileView != null && projectileView.IsPlaying);
+
         private void StartFiringPose(Transform shooterTransform, int direction)
         {
             if (!shooterTransform.TryGetComponent<UnitRenderer>(out var renderer))
@@ -115,6 +135,13 @@ namespace OpenXcom.Unity
 
             if (!deadTransform.TryGetComponent<UnitRenderer>(out var renderer))
                 return;
+
+            // Drop to tile-level (Object-rank) sorting order - see
+            // UnitRenderer.SetSortingOrder's doc comment for why a persisting
+            // corpse can't keep using the usual unit-band order.
+            var pos = unit.Position;
+            int corpseOrder = IsoProjection.SortingOrder(pos.X, pos.Y, pos.Z, _state.Grid.Width, _state.Grid.Length, IsoProjection.PartRank.Object);
+            renderer.SetSortingOrder(corpseOrder);
 
             renderer.SetDeathFrame(0);
             _timedSequences.Add(new TimedSequence
@@ -176,12 +203,12 @@ namespace OpenXcom.Unity
         {
             UpdateHover();
             AdvanceTimedSequences();
-
             if (_activeAnimations.Count > 0)
-            {
                 AdvanceAnimations();
+            ProcessPendingEvents();
+
+            if (IsAnythingAnimating())
                 return; // don't accept new input while any unit is mid-animation
-            }
 
             if (_state == null)
                 return;
@@ -285,12 +312,6 @@ namespace OpenXcom.Unity
             DrainAndAnimate();
         }
 
-        /// <summary>True if transform currently has a pending/in-progress walk
-        /// animation - used to skip starting a firing pose for a unit that's
-        /// still mid-walk in the same drain batch (see the ProjectileFiredEvent
-        /// branch in DrainAndAnimate).</summary>
-        private bool IsAnimating(Transform t) => _activeAnimations.Exists(a => a.Transform == t);
-
         private BattleUnit FindUnitAt(Transform hitTransform)
         {
             foreach (var kv in _unitTransforms)
@@ -317,60 +338,71 @@ namespace OpenXcom.Unity
             return new Position(x, y, z);
         }
 
+        /// <summary>Moves every event BattleState has queued into
+        /// _pendingEvents - does NOT start animating them yet (see
+        /// ProcessPendingEvents, called every Update()).</summary>
         private void DrainAndAnimate()
         {
             foreach (var evt in _state.DequeueEvents())
+                _pendingEvents.Enqueue(evt);
+        }
+
+        /// <summary>Starts the next queued event only once nothing from a
+        /// previous one is still animating - loops so purely-informational
+        /// events (UnitHitEvent/TurnChangedEvent/BattleOverEvent, all just a
+        /// Debug.Log) cascade through immediately in the same tick instead
+        /// of each waiting a full frame for no reason; the loop naturally
+        /// stops the instant it starts an event that actually animates
+        /// something (IsAnythingAnimating becomes true).</summary>
+        private void ProcessPendingEvents()
+        {
+            while (!IsAnythingAnimating() && _pendingEvents.Count > 0)
+                StartEvent(_pendingEvents.Dequeue());
+        }
+
+        private void StartEvent(BattleEvent evt)
+        {
+            if (evt is UnitMovedEvent moved && _unitTransforms.TryGetValue(moved.Unit, out var t))
             {
-                if (evt is UnitMovedEvent moved && _unitTransforms.TryGetValue(moved.Unit, out var t))
+                t.TryGetComponent<UnitRenderer>(out var renderer);
+                _activeAnimations.Add(new UnitAnimation
                 {
-                    t.TryGetComponent<UnitRenderer>(out var renderer);
-                    _activeAnimations.Add(new UnitAnimation
-                    {
-                        Transform = t,
-                        Renderer = renderer,
-                        Queue = new Queue<Position>(moved.Path),
-                        SegmentStart = t.localPosition,
-                        Target = t.localPosition,
-                        Previous = moved.From,
-                        Direction = moved.Unit.Direction,
-                    });
-                }
-                else if (evt is ProjectileFiredEvent fired)
-                {
-                    Debug.Log(fired.Hit
-                        ? $"{fired.Attacker.Name} hits {fired.Defender.Name}"
-                        : $"{fired.Attacker.Name} misses {fired.Defender.Name}");
+                    Transform = t,
+                    Renderer = renderer,
+                    Queue = new Queue<Position>(moved.Path),
+                    SegmentStart = t.localPosition,
+                    Target = t.localPosition,
+                    Previous = moved.From,
+                    Direction = moved.Unit.Direction,
+                });
+            }
+            else if (evt is ProjectileFiredEvent fired)
+            {
+                Debug.Log(fired.Hit
+                    ? $"{fired.Attacker.Name} hits {fired.Defender.Name}"
+                    : $"{fired.Attacker.Name} misses {fired.Defender.Name}");
 
-                    if (projectileView != null && fired.Trajectory.Count >= 2)
-                        projectileView.Play(fired.Trajectory[0], fired.Trajectory[^1], fired.Weapon.BulletSprite);
+                if (projectileView != null && fired.Trajectory.Count >= 2)
+                    projectileView.Play(fired.Trajectory[0], fired.Trajectory[^1], fired.Weapon.BulletSprite);
 
-                    // Skip the firing pose entirely for a unit that still has
-                    // a pending walk animation in this same drain batch (the
-                    // common AI case: approach then shoot in one turn, all
-                    // events drained together) - AdvanceAnimations would just
-                    // overwrite the aim pose with a walk frame on the very
-                    // next tick, and the pose's timed revert could otherwise
-                    // snap the unit to a standing frame mid-slide.
-                    if (_unitTransforms.TryGetValue(fired.Attacker, out var shooterTransform)
-                        && !IsAnimating(shooterTransform))
-                        StartFiringPose(shooterTransform, fired.Attacker.Direction);
-                }
-                else if (evt is UnitHitEvent hitEvent)
-                {
-                    Debug.Log($"{hitEvent.Unit.Name} takes {hitEvent.Damage} damage ({hitEvent.Side})");
-                }
-                else if (evt is UnitDiedEvent died && _unitTransforms.TryGetValue(died.Unit, out var deadTransform))
-                {
-                    StartDeathSequence(died.Unit, deadTransform);
-                }
-                else if (evt is TurnChangedEvent turnChanged)
-                {
-                    Debug.Log($"Turn changed: {turnChanged.Faction}");
-                }
-                else if (evt is BattleOverEvent battleOver)
-                {
-                    Debug.Log($"Battle over: {battleOver.Outcome}");
-                }
+                if (_unitTransforms.TryGetValue(fired.Attacker, out var shooterTransform))
+                    StartFiringPose(shooterTransform, fired.Attacker.Direction);
+            }
+            else if (evt is UnitHitEvent hitEvent)
+            {
+                Debug.Log($"{hitEvent.Unit.Name} takes {hitEvent.Damage} damage ({hitEvent.Side})");
+            }
+            else if (evt is UnitDiedEvent died && _unitTransforms.TryGetValue(died.Unit, out var deadTransform))
+            {
+                StartDeathSequence(died.Unit, deadTransform);
+            }
+            else if (evt is TurnChangedEvent turnChanged)
+            {
+                Debug.Log($"Turn changed: {turnChanged.Faction}");
+            }
+            else if (evt is BattleOverEvent battleOver)
+            {
+                Debug.Log($"Battle over: {battleOver.Outcome}");
             }
         }
 
