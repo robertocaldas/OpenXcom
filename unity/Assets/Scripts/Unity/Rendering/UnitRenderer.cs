@@ -24,6 +24,21 @@ namespace OpenXcom.Unity.Rendering
     /// </summary>
     public sealed class UnitRenderer : MonoBehaviour
     {
+        // NOT a port - HANDOB.PCK's item art is positioned within its 32x40
+        // canvas assuming a human-height hand (same canvas convention as the
+        // XCOM_0 body atlas, where it lines up correctly). A short race like
+        // the Sectoid doesn't fill anywhere near that much of ITS OWN 32x40
+        // canvas, so the item's (correctly-computed, un-offset) position
+        // renders well above/outside the alien's actual visible body,
+        // reading as "floating, disconnected from the body" - confirmed live
+        // (reported directly by the user, reproduced and inspected across 4
+        // directions). The real C++ engine applies no equivalent correction
+        // for one-handed items (offX/offY there are aiming+two-handed only,
+        // UnitSprite.cpp:446-500) and has no cited per-race calibration to
+        // port instead, so this is an empirical downward nudge tuned by eye
+        // against a live capture, not a value derived from the source.
+        private const float OneHandedItemYOffset = -0.3f;
+
         private SpriteRenderer _legs;
         private SpriteRenderer _rightArm;
         private SpriteRenderer _torso;
@@ -121,6 +136,10 @@ namespace OpenXcom.Unity.Rendering
                     // is applied as-is while the Y offset is negated to match.
                     float offX = offsetItem ? UnitSpriteFrames.AimOffsetX[direction] / TileRenderer.PixelsPerUnit : 0f;
                     float offY = offsetItem ? -UnitSpriteFrames.AimOffsetY[direction] / TileRenderer.PixelsPerUnit : 0f;
+                    // See OneHandedItemYOffset's doc comment - a one-handed
+                    // item needs this regardless of direction/aiming state.
+                    if (!twoHanded)
+                        offY += OneHandedItemYOffset;
                     _item.transform.localPosition = new Vector3(offX, offY, 0f);
                 }
                 else
