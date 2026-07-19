@@ -221,6 +221,68 @@ namespace OpenXcom.Core.Tests
         }
 
         [Fact]
+        public void BuildFromLayout_TwoAdjacentSyntheticBlocks_ProducesOneMergedGrid()
+        {
+            var terrain = new RuleTerrain("TEST", new List<MapDataSetInfo> { new() { Name = "TEST", Size = 2 } });
+            var datasetTiles = new Dictionary<string, List<MapDataTile>>
+            {
+                ["TEST"] = new() { new MapDataTile(), new MapDataTile() },
+            };
+            var block = new DataLoader.RawMapBlockData
+            {
+                Width = 1, Length = 1, Height = 1,
+                Tiles = new List<DataLoader.RawMapBlockTile> { new() { Floor = 1 } },
+                RouteNodes = new List<DataLoader.RawRouteNode> { new() { X = 0, Y = 0, Z = 0 } },
+            };
+            var layout = new GeneratedLayout
+            {
+                MapSizeXBlocks = 2, MapSizeYBlocks = 1,
+                Pieces = new List<PlacedPiece>
+                {
+                    new() { BlockName = "A", TerrainName = "TEST", GridX = 0, GridY = 0 },
+                    new() { BlockName = "A", TerrainName = "TEST", GridX = 1, GridY = 0 },
+                },
+            };
+
+            var (grid, nodes) = MapGenerator.BuildFromLayout(layout,
+                _ => terrain, _ => block, _ => datasetTiles);
+
+            Assert.Equal(20, grid.Width); // 2 blocks * 10 tiles
+            Assert.Equal(10, grid.Length);
+            Assert.NotNull(grid.At(0, 0, 0).Floor);
+            Assert.NotNull(grid.At(10, 0, 0).Floor); // second block's origin
+            Assert.Equal(2, nodes.Count);
+            Assert.Equal(0, nodes[0].X);
+            Assert.Equal(10, nodes[1].X); // offset into the second block
+        }
+
+        [Fact]
+        public void BuildFromLayout_NullBlockNamePiece_LeavesThatCellEmpty()
+        {
+            var terrain = new RuleTerrain("TEST", new List<MapDataSetInfo> { new() { Name = "TEST", Size = 2 } });
+            var datasetTiles = new Dictionary<string, List<MapDataTile>> { ["TEST"] = new() { new MapDataTile(), new MapDataTile() } };
+            var block = new DataLoader.RawMapBlockData
+            {
+                Width = 1, Length = 1, Height = 1,
+                Tiles = new List<DataLoader.RawMapBlockTile> { new() { Floor = 1 } },
+                RouteNodes = new List<DataLoader.RawRouteNode>(),
+            };
+            var layout = new GeneratedLayout
+            {
+                MapSizeXBlocks = 1, MapSizeYBlocks = 1,
+                Pieces = new List<PlacedPiece>
+                {
+                    new() { BlockName = "A", TerrainName = "TEST", GridX = 0, GridY = 0 },
+                    new() { BlockName = null, TerrainName = null, GridX = 0, GridY = 0 },
+                },
+            };
+
+            var (grid, _) = MapGenerator.BuildFromLayout(layout, _ => terrain, _ => block, _ => datasetTiles);
+
+            Assert.Null(grid.At(0, 0, 0).Floor);
+        }
+
+        [Fact]
         public void ConvertJob_WritesAllNineteenFarmlandMapblocks()
         {
             Xcom.Convert.ConvertJob.Run(DataDir, TestPaths.RulesDir, TestPaths.CommonDir, _outDir);
