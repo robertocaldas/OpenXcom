@@ -13,14 +13,17 @@ namespace OpenXcom.Unity
     /// Assembles a real BattleState (real soldier/Sectoid stats, real
     /// weapons) and binds it to BattleController. Requires
     /// BattlescapeMapView on the same GameObject: reads its already-built
-    /// Grid rather than reloading/rebuilding the mapblock a second time.
+    /// Grid/RouteNodes rather than reloading/rebuilding the level a second
+    /// time.
     ///
-    /// Squad is placed at fixed coordinates, not BattleState.SpawnAtRouteNodes
-    /// - CULTA00's .RMP has only one route node (verified directly against
-    /// the raw file: 24 bytes = one record), so route-node spawning can't
-    /// seat a 4-unit squad. Every tile in CULTA00 is walkable, so any
-    /// coordinates work; these three put the two soldiers together in one
-    /// corner and the two Sectoids together in the opposite corner.
+    /// [SIMPLIFIED] Real deployment data would place soldiers at the
+    /// Skyranger's own door tiles and aliens at rank-filtered nodes (design
+    /// spec §6) - neither is converted this phase. Route nodes are split by
+    /// list order instead: the first quarter (biased toward wherever the
+    /// generator placed pieces earliest, which includes the craft/UFO's own
+    /// reserved footprint - see MapScriptInterpreter.Generate) go to
+    /// soldiers, the rest to Sectoids. Not a real "spawn near the craft"
+    /// rule, just an honest, working stand-in for one.
     /// </summary>
     [RequireComponent(typeof(BattlescapeMapView))]
     [RequireComponent(typeof(BattleController))]
@@ -29,21 +32,19 @@ namespace OpenXcom.Unity
     [RequireComponent(typeof(ProjectileView))]
     public sealed class BattlescapeBootstrap : MonoBehaviour
     {
-        private static readonly Position SoldierAPos = new(1, 1, 0);
-        private static readonly Position SoldierBPos = new(2, 1, 0);
-        private static readonly Position SectoidAPos = new(8, 8, 0);
-        private static readonly Position SectoidBPos = new(7, 8, 0);
-
         /// <summary>Initial spawn facing: direction 4 = south / facing the
         /// camera (UnitSprite.cpp:290-369,620; Pathfinding.h:220 for the
         /// direction convention) - units turn freely once the battle starts
         /// (BattleState.TryMove/TryFire), this is just the spawn pose.</summary>
         private const int SouthDirection = 4;
+        private const int SoldierCount = 4;
+        private const int SectoidCount = 4;
 
         private void Start()
         {
             string gameDataDir = Path.Combine(Application.dataPath, "GameData");
-            var grid = GetComponent<BattlescapeMapView>().Grid;
+            var mapView = GetComponent<BattlescapeMapView>();
+            var grid = mapView.Grid;
 
             var armorsById = DataLoader.LoadArmors(gameDataDir).ToDictionary(a => a.Id);
             var unitsById = DataLoader.LoadUnits(gameDataDir, armorsById).ToDictionary(u => u.Id);
@@ -56,16 +57,34 @@ namespace OpenXcom.Unity
 
             var state = new BattleState(grid);
             state.LoftData = DataLoader.LoadLoftemps(gameDataDir);
-            var unitTransforms = new Dictionary<BattleUnit, Transform>();
 
-            Spawn(state, grid, unitTransforms, unitsById["STR_SOLDIER"], itemsById["STR_RIFLE"],
-                Faction.Player, "Soldier A", SoldierAPos, xcomAtlas, handobAtlas);
-            Spawn(state, grid, unitTransforms, unitsById["STR_SOLDIER"], itemsById["STR_RIFLE"],
-                Faction.Player, "Soldier B", SoldierBPos, xcomAtlas, handobAtlas);
-            Spawn(state, grid, unitTransforms, unitsById["STR_SECTOID_SOLDIER"], itemsById["STR_PLASMA_PISTOL"],
-                Faction.Hostile, "Sectoid A", SectoidAPos, sectoidAtlas, handobAtlas);
-            Spawn(state, grid, unitTransforms, unitsById["STR_SECTOID_SOLDIER"], itemsById["STR_PLASMA_PISTOL"],
-                Faction.Hostile, "Sectoid B", SectoidBPos, sectoidAtlas, handobAtlas);
+            int splitIndex = mapView.RouteNodes.Count / 4;
+            var soldierNodes = mapView.RouteNodes.Take(splitIndex).ToList();
+            var sectoidNodes = mapView.RouteNodes.Skip(splitIndex).ToList();
+
+            var soldierUnits = new List<BattleUnit>();
+            for (int i = 0; i < SoldierCount; i++)
+                soldierUnits.Add(new BattleUnit(unitsById["STR_SOLDIER"], Faction.Player, $"Soldier {(char)('A' + i)}")
+                {
+                    Direction = SouthDirection,
+                    RightHand = new BattleItem(itemsById["STR_RIFLE"]),
+                });
+            state.SpawnSquad(soldierNodes, soldierUnits);
+
+            var sectoidUnits = new List<BattleUnit>();
+            for (int i = 0; i < SectoidCount; i++)
+                sectoidUnits.Add(new BattleUnit(unitsById["STR_SECTOID_SOLDIER"], Faction.Hostile, $"Sectoid {(char)('A' + i)}")
+                {
+                    Direction = SouthDirection,
+                    RightHand = new BattleItem(itemsById["STR_PLASMA_PISTOL"]),
+                });
+            state.SpawnSquad(sectoidNodes, sectoidUnits);
+
+            var unitTransforms = new Dictionary<BattleUnit, Transform>();
+            foreach (var unit in soldierUnits.Where(u => state.Units.Contains(u)))
+                unitTransforms[unit] = BuildUnitGameObject(unit, xcomAtlas, handobAtlas, grid.Width, grid.Length);
+            foreach (var unit in sectoidUnits.Where(u => state.Units.Contains(u)))
+                unitTransforms[unit] = BuildUnitGameObject(unit, sectoidAtlas, handobAtlas, grid.Width, grid.Length);
 
             GetComponent<BattleController>().Bind(state, unitTransforms);
 
@@ -78,28 +97,20 @@ namespace OpenXcom.Unity
             GetComponent<ProjectileView>().Setup(bulletAtlas);
         }
 
-        private void Spawn(BattleState state, OpenXcom.Core.Battle.TileGrid grid,
-            Dictionary<BattleUnit, Transform> unitTransforms,
-            RuleUnit ruleUnit, RuleItem weapon, Faction faction, string name, Position position,
+        /// <summary>Builds the GameObject/UnitRenderer for an already-spawned
+        /// unit (Position/RightHand already set by BattleState.SpawnSquad).</summary>
+        private Transform BuildUnitGameObject(BattleUnit unit,
             (Texture2D texture, List<Rect> frameRects) bodyAtlas,
-            (Texture2D texture, List<Rect> frameRects) itemAtlas)
+            (Texture2D texture, List<Rect> frameRects) itemAtlas,
+            int gridWidth, int gridLength)
         {
-            var unit = new BattleUnit(ruleUnit, faction, name)
-            {
-                Position = position,
-                Direction = SouthDirection,
-                RightHand = new BattleItem(weapon),
-            };
-            grid.At(position.X, position.Y, position.Z).Occupant = unit;
-            state.Units.Add(unit);
-
-            var go = new GameObject(name);
+            var go = new GameObject(unit.Name);
             go.transform.SetParent(transform, worldPositionStays: false);
             var renderer = go.AddComponent<UnitRenderer>();
-            renderer.Setup(position.X, position.Y, position.Z, grid.Width, grid.Length, bodyAtlas, itemAtlas, weapon, ruleUnit.StandHeight);
+            renderer.Setup(unit.Position.X, unit.Position.Y, unit.Position.Z, gridWidth, gridLength,
+                bodyAtlas, itemAtlas, unit.RightHand.Rules, unit.Rules.StandHeight);
             renderer.SetFrame(unit.Direction, walkPhase: -1, isAiming: false);
-
-            unitTransforms[unit] = go.transform;
+            return go.transform;
         }
     }
 }
