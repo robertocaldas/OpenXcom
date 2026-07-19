@@ -178,6 +178,17 @@ the hole with your own invented logic. When a human reports something still
 looks/behaves wrong after a fix, treat that as a signal to go find the real
 cited mechanism, not to tune your own guess further.
 
+**When talking to the user about this work, don't bring up the C/C++ code at
+all unless it's genuinely important.** The user doesn't read the C/C++ source
+and doesn't know its classes, files, or function names. File:line citations
+belong in code comments, commit messages, and design docs (where they matter
+for verifying the port), not in chat prose — don't mention them there by
+default. On the rare occasion the C/C++ side is actually worth surfacing to
+the user, don't name it as if they already know what it is (no
+"`BattlescapeGenerator`", no "`MapScript::getNextBlock`") — describe what it
+*does* in plain terms instead ("the original level-generation algorithm",
+"the block-picking logic").
+
 - `unity/Xcom.Convert` — offline .NET CLI that decodes original UFO data
   (`unity/RawData/`, gitignored) into PNG atlases + JSON under
   `unity/Assets/GameData/` (also gitignored).
