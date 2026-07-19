@@ -27,10 +27,15 @@ namespace OpenXcom.Core.Battle
     /// resolved into actual tile data (MapGenerator.BuildFromLayout).
     /// Port of the command-dispatch loop in
     /// BattlescapeGenerator::generateMap
-    /// (src/Battlescape/BattlescapeGenerator.cpp:2862-3335). `digTunnel` and
-    /// stacked "vertical levels" are recognized but not executed - recorded
-    /// in DeferredCommandsSkipped - since no terrain converted this phase
-    /// uses either (design spec §2/§4).
+    /// (src/Battlescape/BattlescapeGenerator.cpp:2862-3335). `digTunnel` is
+    /// recognized but not executed - recorded in DeferredCommandsSkipped -
+    /// since no terrain converted this phase uses it (design spec §2/§4).
+    /// Stacked "vertical levels" (an optional per-command YAML modifier, not
+    /// a command type) are a separate, larger gap: MapScriptCommand (Task 4)
+    /// never parses that field at all, so there is nothing here to detect or
+    /// record - if a future terrain's script used verticalLevels, this
+    /// interpreter would silently ignore the modifier. Documented as a known
+    /// gap, not fixed this phase (no terrain converted so far uses it).
     /// </summary>
     public static class MapScriptInterpreter
     {
@@ -331,8 +336,7 @@ namespace OpenXcom.Core.Battle
         /// <summary>Port of the MSC_CHECKBLOCK case (src/Battlescape/BattlescapeGenerator.cpp:3198-3233).</summary>
         private static bool RunCheckBlock(RuleTerrain terrain, MapScriptCommand cmd, MapBlockInfo[,] placedAt, int mapW, int mapH)
         {
-            var areas = cmd.Rects.Count > 0 ? cmd.Rects : new List<MapScriptRect> { new() { X = 0, Y = 0, W = mapW, H = mapH } };
-            foreach (var rect in areas)
+            foreach (var rect in cmd.Rects)
             {
                 for (int x = rect.X; x < rect.X + rect.W && x < mapW; x++)
                 {
