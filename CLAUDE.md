@@ -153,6 +153,31 @@ offline) but has clean-slate code, no mod support, no save-compat with this
 C++ engine. Treat it as a separate project sharing this repo; `src/` is only
 a reference spec for its ports (formulas, file formats).
 
+**THE MOST IMPORTANT RULE for this subproject: this is a PORT, not a
+reimplementation.** Every algorithm, formula, and constant that has an
+equivalent in the original engine MUST come from the C/C++ source in `src/`,
+cited by file:line — never invented, guessed, or "improved" independently,
+even when the original's approach looks obscure, roundabout, or when a
+simpler alternative seems like it should produce an equivalent result. If a
+ported feature looks visibly wrong once running, the fix is almost always to
+go re-read the C++ source more carefully (a citation was missed, a formula
+was mis-transcribed, a branch/edge-case was skipped) — **not** to devise a
+new mechanism that happens to produce a similar-looking result. A concrete
+example from this project: Phase 9's held-item sprite rendered visibly
+detached from a short alien race's body. The first fix was an empirically
+tuned pixel offset, found by trial-and-error against live screenshots — it
+looked plausible and materially improved the symptom, but was wrong. Only
+going back to `UnitSprite.cpp` and actually reading the surrounding code
+turned up the real, already-existing mechanism (`itemR.offY += (soldierHeight
+- unit->getStandHeight())`, `UnitSprite.cpp:577-585`) — a different,
+smaller, provably-correct value with a one-line comment in the original
+explaining exactly why it exists. If you genuinely cannot find where (or
+whether) the original handles some situation after a real search, say so
+explicitly and record it as a documented `[SIMPLIFIED]`/gap — do not fill
+the hole with your own invented logic. When a human reports something still
+looks/behaves wrong after a fix, treat that as a signal to go find the real
+cited mechanism, not to tune your own guess further.
+
 - `unity/Xcom.Convert` — offline .NET CLI that decodes original UFO data
   (`unity/RawData/`, gitignored) into PNG atlases + JSON under
   `unity/Assets/GameData/` (also gitignored).
