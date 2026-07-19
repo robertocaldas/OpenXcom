@@ -215,23 +215,20 @@ add:
             // (UFO1, PLANE), same PCK/MCD pipeline as farmland's CULTIVAT/BARN.
             void ConvertMiniTerrain(string terrainName, string extraDatasetName, string blockName)
             {
-                foreach (var name in new[] { extraDatasetName })
-                {
-                    var frames = PckDecoder.Load(
-                        File.ReadAllBytes(Path.Combine(dataDir, "TERRAIN", $"{name}.PCK")),
-                        File.ReadAllBytes(Path.Combine(dataDir, "TERRAIN", $"{name}.TAB")), 32, 40);
-                    var atlas = AtlasWriter.Build(frames, pal);
-                    AtlasWriter.Save(atlas,
-                        Path.Combine(outDir, $"terrain-{name}.png"),
-                        Path.Combine(outDir, $"terrain-{name}.frames.json"));
-                    written.Add($"terrain-{name}.png");
-                    written.Add($"terrain-{name}.frames.json");
+                var frames = PckDecoder.Load(
+                    File.ReadAllBytes(Path.Combine(dataDir, "TERRAIN", $"{extraDatasetName}.PCK")),
+                    File.ReadAllBytes(Path.Combine(dataDir, "TERRAIN", $"{extraDatasetName}.TAB")), 32, 40);
+                var atlas = AtlasWriter.Build(frames, pal);
+                AtlasWriter.Save(atlas,
+                    Path.Combine(outDir, $"terrain-{extraDatasetName}.png"),
+                    Path.Combine(outDir, $"terrain-{extraDatasetName}.frames.json"));
+                written.Add($"terrain-{extraDatasetName}.png");
+                written.Add($"terrain-{extraDatasetName}.frames.json");
 
-                    var tiles = McdDecoder.Load(File.ReadAllBytes(Path.Combine(dataDir, "TERRAIN", $"{name}.MCD")));
-                    File.WriteAllText(Path.Combine(outDir, $"tiles-{name}.json"),
-                        JsonConvert.SerializeObject(tiles, Formatting.Indented));
-                    written.Add($"tiles-{name}.json");
-                }
+                var tiles = McdDecoder.Load(File.ReadAllBytes(Path.Combine(dataDir, "TERRAIN", $"{extraDatasetName}.MCD")));
+                File.WriteAllText(Path.Combine(outDir, $"tiles-{extraDatasetName}.json"),
+                    JsonConvert.SerializeObject(tiles, Formatting.Indented));
+                written.Add($"tiles-{extraDatasetName}.json");
 
                 var miniTerrainInfo = new TerrainDatasetsInfo
                 {
@@ -239,8 +236,7 @@ add:
                     Datasets = new List<DatasetInfo>
                     {
                         new() { Name = "BLANKS", Size = datasetSizes[0].Size }, // BLANKS already converted above
-                        new() { Name = extraDatasetName, Size = McdDecoder.Load(
-                            File.ReadAllBytes(Path.Combine(dataDir, "TERRAIN", $"{extraDatasetName}.MCD"))).Count },
+                        new() { Name = extraDatasetName, Size = tiles.Count },
                     },
                 };
                 File.WriteAllText(Path.Combine(outDir, $"terrain-{terrainName}.datasets.json"),
