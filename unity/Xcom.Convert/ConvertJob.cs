@@ -204,19 +204,8 @@ namespace Xcom.Convert
                     JsonConvert.SerializeObject(tiles, Formatting.Indented));
                 written.Add($"tiles-{extraDatasetName}.json");
 
-                var miniTerrainInfo = new TerrainDatasetsInfo
-                {
-                    Name = terrainName,
-                    Datasets = new List<DatasetInfo>
-                    {
-                        new() { Name = "BLANKS", Size = datasetSizes[0].Size }, // BLANKS already converted above
-                        new() { Name = extraDatasetName, Size = tiles.Count },
-                    },
-                };
-                File.WriteAllText(Path.Combine(outDir, $"terrain-{terrainName}.datasets.json"),
-                    JsonConvert.SerializeObject(miniTerrainInfo, Formatting.Indented));
-                written.Add($"terrain-{terrainName}.datasets.json");
-
+                // Decode the real mapblock before building the terrain info so
+                // its .MAP-header Width/Length feed the Blocks catalog below.
                 var mapBlock = MapBlockDecoder.LoadMap(
                     File.ReadAllBytes(Path.Combine(dataDir, "MAPS", $"{blockName}.MAP")));
                 mapBlock.RouteNodes = MapBlockDecoder.LoadRmp(
@@ -225,6 +214,30 @@ namespace Xcom.Convert
                 File.WriteAllText(Path.Combine(outDir, $"mapblock-{blockName}.json"),
                     JsonConvert.SerializeObject(mapBlock, Formatting.Indented));
                 written.Add($"mapblock-{blockName}.json");
+
+                var miniTerrainInfo = new TerrainDatasetsInfo
+                {
+                    Name = terrainName,
+                    Datasets = new List<DatasetInfo>
+                    {
+                        new() { Name = "BLANKS", Size = datasetSizes[0].Size }, // BLANKS already converted above
+                        new() { Name = extraDatasetName, Size = tiles.Count },
+                    },
+                    // The interpreter (MapScriptInterpreter.RunAddCraftOrUfo)
+                    // needs every terrain's Blocks populated to size the
+                    // craft/UFO footprint. These mini-terrains carry a single
+                    // mapblock; group [0] = MT_DEFAULT (MapBlock.cpp:33's
+                    // constructor default), since neither ufos.rul's
+                    // STR_SMALL_SCOUT nor crafts.rul's STR_SKYRANGER mapBlocks
+                    // entry specifies groups:.
+                    Blocks = new List<ConvertedTerrainBlock>
+                    {
+                        new() { Name = blockName, Width = mapBlock.Width, Length = mapBlock.Length, Groups = new List<int> { 0 } },
+                    },
+                };
+                File.WriteAllText(Path.Combine(outDir, $"terrain-{terrainName}.datasets.json"),
+                    JsonConvert.SerializeObject(miniTerrainInfo, Formatting.Indented));
+                written.Add($"terrain-{terrainName}.datasets.json");
             }
 
             ConvertMiniTerrain("UFO1A", "UFO1", "UFO1A");
