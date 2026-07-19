@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using OpenXcom.Core.Battle;
+using OpenXcom.Core.Common;
 using OpenXcom.Core.Rules;
 using OpenXcom.Unity.Rendering;
 using UnityEngine;
@@ -8,42 +10,79 @@ using UnityEngine;
 namespace OpenXcom.Unity
 {
     /// <summary>
-    /// Loads the CULTA00 mapblock via Core's MapGenerator and instantiates one
-    /// TileRenderer per tile. Reads converted PNG/JSON directly from
-    /// Assets/GameData/ (gitignored, produced locally by `dotnet run` in
-    /// Xcom.Convert — never committed) rather than importing it as a Unity
-    /// asset, since the output is a regenerable derivative of copyrighted art.
+    /// Runs the real terrain-script interpreter to assemble a full farmland
+    /// level (Small Scout UFO + Skyranger + random farmland fill, per the
+    /// real FARM script) and instantiates one TileRenderer per tile. Reads
+    /// converted PNG/JSON directly from Assets/GameData/ (gitignored,
+    /// produced locally by `dotnet run` in Xcom.Convert - never committed)
+    /// rather than importing it as a Unity asset, since the output is a
+    /// regenerable derivative of copyrighted art.
     ///
     /// Runs in Awake (not Start) so BattlescapeBootstrap - which needs this
-    /// component's Grid to already exist - can safely read it from its own
-    /// Start(): Unity guarantees every component's Awake() on a GameObject
-    /// runs before any component's Start() on that same GameObject.
+    /// component's Grid/RouteNodes to already exist - can safely read them
+    /// from its own Start(): Unity guarantees every component's Awake() on
+    /// a GameObject runs before any component's Start() on that same
+    /// GameObject.
     /// </summary>
     public sealed class BattlescapeMapView : MonoBehaviour
     {
         [SerializeField] private string terrainName = "CULTA";
-        [SerializeField] private string mapBlockName = "CULTA00";
-        [SerializeField] private string[] datasetNames = { "BLANKS", "CULTIVAT", "BARN" };
+        [SerializeField] private string craftTerrainName = "PLANE";
+        [SerializeField] private string ufoTerrainName = "UFO1A";
+        [SerializeField] private int mapSizeXBlocks = 5;
+        [SerializeField] private int mapSizeYBlocks = 5;
+        [SerializeField] private int rngSeed = 1;
 
-        /// <summary>The battle grid built from the mapblock this view rendered. Populated by Awake().</summary>
+        /// <summary>The battle grid built from the generated level. Populated by Awake().</summary>
         public TileGrid Grid { get; private set; }
+
+        /// <summary>Every placed piece's route nodes, offset into the merged grid. Populated by Awake().</summary>
+        public IReadOnlyList<DataLoader.RawRouteNode> RouteNodes { get; private set; }
 
         private void Awake()
         {
             string gameDataDir = Path.Combine(Application.dataPath, "GameData");
 
-            var terrain = DataLoader.LoadTerrain(gameDataDir, terrainName);
-            var datasetTiles = new Dictionary<string, List<MapDataTile>>();
+            var farmland = DataLoader.LoadTerrain(gameDataDir, terrainName);
+            var craftTerrain = DataLoader.LoadTerrain(gameDataDir, craftTerrainName);
+            var ufoTerrain = DataLoader.LoadTerrain(gameDataDir, ufoTerrainName);
+            var script = DataLoader.LoadMapScript(gameDataDir, farmland.Script);
+
+            var layout = MapScriptInterpreter.Generate(
+                farmland, script, mapSizeXBlocks, mapSizeYBlocks, craftTerrain, ufoTerrain, new Rng((uint)rngSeed));
+
+            var terrainsByName = new Dictionary<string, RuleTerrain>
+            {
+                [farmland.Name] = farmland, [craftTerrain.Name] = craftTerrain, [ufoTerrain.Name] = ufoTerrain,
+            };
+            var datasetTilesByTerrain = new Dictionary<string, IReadOnlyDictionary<string, List<MapDataTile>>>();
             var datasetAtlases = new Dictionary<string, (Texture2D texture, List<Rect> frameRects)>();
 
-            foreach (var name in datasetNames)
+            foreach (var terrain in terrainsByName.Values)
             {
-                datasetTiles[name] = DataLoader.LoadTiles(gameDataDir, name);
-                datasetAtlases[name] = AtlasLoader.Load(gameDataDir, $"terrain-{name}");
+                var tilesByDataset = new Dictionary<string, List<MapDataTile>>();
+                foreach (var ds in terrain.DataSets)
+                {
+                    if (!datasetAtlases.ContainsKey(ds.Name))
+                    {
+                        tilesByDataset[ds.Name] = DataLoader.LoadTiles(gameDataDir, ds.Name);
+                        datasetAtlases[ds.Name] = AtlasLoader.Load(gameDataDir, $"terrain-{ds.Name}");
+                    }
+                    else
+                    {
+                        tilesByDataset[ds.Name] = DataLoader.LoadTiles(gameDataDir, ds.Name);
+                    }
+                }
+                datasetTilesByTerrain[terrain.Name] = tilesByDataset;
             }
 
-            var block = DataLoader.LoadMapBlock(gameDataDir, mapBlockName);
-            Grid = MapGenerator.Build(block, terrain, datasetTiles);
+            var (grid, routeNodes) = MapGenerator.BuildFromLayout(
+                layout,
+                name => terrainsByName[name],
+                name => DataLoader.LoadMapBlock(gameDataDir, name),
+                name => datasetTilesByTerrain[name]);
+            Grid = grid;
+            RouteNodes = routeNodes;
 
             for (int z = 0; z < Grid.Height; z++)
             {
