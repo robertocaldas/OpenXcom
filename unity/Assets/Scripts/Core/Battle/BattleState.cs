@@ -101,6 +101,47 @@ namespace OpenXcom.Core.Battle
         }
 
         /// <summary>
+        /// Adds `squad` to this battle, each unit placed at a distinct,
+        /// unoccupied node picked at random from `candidateNodes` (via this
+        /// BattleState's own Rng). Callable multiple times on the same
+        /// state - unlike the static SpawnAtRouteNodes factory above, which
+        /// always builds a fresh one - so separate factions can each spawn
+        /// at their own filtered node subset. [SIMPLIFIED] no rank/type
+        /// filtering, same documented gap as SpawnAtRouteNodes: real
+        /// deployment-based spawn rules need .rul data not converted this
+        /// phase (design spec §6).
+        /// </summary>
+        public void SpawnSquad(IReadOnlyList<DataLoader.RawRouteNode> candidateNodes, IReadOnlyList<BattleUnit> squad)
+        {
+            var remaining = new List<DataLoader.RawRouteNode>(candidateNodes);
+
+            foreach (var unit in squad)
+            {
+                Position? chosen = null;
+                while (remaining.Count > 0)
+                {
+                    int i = Rng.Generate(0, remaining.Count - 1);
+                    var node = remaining[i];
+                    remaining.RemoveAt(i);
+
+                    var pos = new Position(node.X, node.Y, node.Z);
+                    var tile = Grid[pos];
+                    if (tile != null && tile.Occupant == null)
+                    {
+                        chosen = pos;
+                        break;
+                    }
+                }
+
+                if (chosen == null) continue; // ran out of free candidate nodes
+
+                unit.Position = chosen.Value;
+                Grid[chosen.Value].Occupant = unit;
+                Units.Add(unit);
+            }
+        }
+
+        /// <summary>
         /// Finds a path from the unit's current position to target and walks
         /// as far as its TU budget allows, spending TU per step, updating
         /// occupancy, and enqueueing one UnitMovedEvent covering the tiles

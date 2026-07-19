@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using OpenXcom.Core.Battle;
 using OpenXcom.Core.Common;
 using OpenXcom.Core.Rules;
@@ -76,6 +77,61 @@ namespace OpenXcom.Core.Tests
             Assert.Equal(new Position(5, 5, 0), state.Units[1].Position);
             // The third node (9,9,0) must NOT have received a unit.
             Assert.Null(grid.At(9, 9, 0).Occupant);
+        }
+
+        [Fact]
+        public void SpawnSquad_PlacesEveryUnitAtADistinctCandidateNode()
+        {
+            var grid = new TileGrid(5, 5, 1);
+            var state = new BattleState(grid, new Rng(1));
+            var nodes = new List<DataLoader.RawRouteNode>
+            {
+                new() { X = 0, Y = 0, Z = 0 },
+                new() { X = 1, Y = 0, Z = 0 },
+                new() { X = 2, Y = 0, Z = 0 },
+            };
+            var squad = new List<BattleUnit>
+            {
+                new(new RuleUnit("TEST", UnitStats.Rookie, RuleArmor.None), Faction.Player, "A"),
+                new(new RuleUnit("TEST", UnitStats.Rookie, RuleArmor.None), Faction.Player, "B"),
+            };
+
+            state.SpawnSquad(nodes, squad);
+
+            Assert.Equal(2, state.Units.Count);
+            var positions = state.Units.Select(u => (u.Position.X, u.Position.Y)).ToHashSet();
+            Assert.Equal(2, positions.Count); // distinct tiles
+            foreach (var u in state.Units)
+                Assert.Same(grid.At(u.Position.X, u.Position.Y, u.Position.Z).Occupant, u);
+        }
+
+        [Fact]
+        public void SpawnSquad_SkipsAnAlreadyOccupiedNode()
+        {
+            var grid = new TileGrid(5, 5, 1);
+            var state = new BattleState(grid, new Rng(1));
+            var nodes = new List<DataLoader.RawRouteNode> { new() { X = 0, Y = 0, Z = 0 } };
+            grid.At(0, 0, 0).Occupant = new BattleUnit(new RuleUnit("TEST", UnitStats.Rookie, RuleArmor.None), Faction.Hostile, "Blocker");
+
+            state.SpawnSquad(nodes, new List<BattleUnit> { new(new RuleUnit("TEST", UnitStats.Rookie, RuleArmor.None), Faction.Player, "A") });
+
+            Assert.Empty(state.Units); // the only node was occupied, nothing else to try
+        }
+
+        [Fact]
+        public void SpawnSquad_CalledTwice_BothFactionsCoexistOnTheSameState()
+        {
+            var grid = new TileGrid(5, 5, 1);
+            var state = new BattleState(grid, new Rng(1));
+            var playerNodes = new List<DataLoader.RawRouteNode> { new() { X = 0, Y = 0, Z = 0 } };
+            var hostileNodes = new List<DataLoader.RawRouteNode> { new() { X = 4, Y = 4, Z = 0 } };
+
+            state.SpawnSquad(playerNodes, new List<BattleUnit> { new(new RuleUnit("TEST", UnitStats.Rookie, RuleArmor.None), Faction.Player, "A") });
+            state.SpawnSquad(hostileNodes, new List<BattleUnit> { new(new RuleUnit("TEST", UnitStats.Rookie, RuleArmor.None), Faction.Hostile, "X") });
+
+            Assert.Equal(2, state.Units.Count);
+            Assert.Contains(state.Units, u => u.Faction == Faction.Player);
+            Assert.Contains(state.Units, u => u.Faction == Faction.Hostile);
         }
 
         [Fact]
