@@ -25,6 +25,7 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Contains(written, p => p == "terrain-BARN.png");
             Assert.Contains(written, p => p == "tiles-BARN.json");
             Assert.Contains(written, p => p == "terrain-CULTA.datasets.json");
+            Assert.Contains(written, p => p == "mapscript-FARM.json");
             Assert.Contains(written, p => p == "terrain-UFO1.png");
             Assert.Contains(written, p => p == "terrain-UFO1.frames.json");
             Assert.Contains(written, p => p == "tiles-UFO1.json");
@@ -59,11 +60,11 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Contains(written, p => p == "bulletsprites.frames.json");
             Assert.True(File.Exists(Path.Combine(outDir, "manifest.json")));
 
-            Assert.Equal(59, written.Count);
+            Assert.Equal(60, written.Count);
             var manifestJson = File.ReadAllText(Path.Combine(outDir, "manifest.json"));
             var manifest = Newtonsoft.Json.Linq.JObject.Parse(manifestJson);
             var files = manifest["files"].Select(t => t.ToString()).ToList();
-            Assert.Equal(59, files.Count);
+            Assert.Equal(60, files.Count);
 
             // icons.png: single 320x56 frame (no companion .TAB on disk).
             var iconsFramesJson = File.ReadAllText(Path.Combine(outDir, "icons.frames.json"));

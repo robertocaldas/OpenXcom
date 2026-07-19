@@ -15,7 +15,9 @@ namespace Xcom.Convert
     public sealed class TerrainDatasetsInfo
     {
         public string Name;
+        public string Script;
         public List<DatasetInfo> Datasets = new();
+        public List<ConvertedTerrainBlock> Blocks = new();
     }
 
     /// <summary>
@@ -62,10 +64,22 @@ namespace Xcom.Convert
                 datasetSizes.Add(new DatasetInfo { Name = name, Size = tiles.Count });
             }
 
-            var terrainInfo = new TerrainDatasetsInfo { Name = "CULTA", Datasets = datasetSizes };
+            var farmlandRules = RuleYamlDecoder.LoadTerrainBlocks(Path.Combine(rulesDir, "terrains.rul"), "CULTA");
+            var terrainInfo = new TerrainDatasetsInfo
+            {
+                Name = "CULTA",
+                Script = farmlandRules.Script,
+                Datasets = datasetSizes,
+                Blocks = farmlandRules.Blocks,
+            };
             File.WriteAllText(Path.Combine(outDir, "terrain-CULTA.datasets.json"),
                 JsonConvert.SerializeObject(terrainInfo, Formatting.Indented));
             written.Add("terrain-CULTA.datasets.json");
+
+            var farmScript = RuleYamlDecoder.LoadMapScript(Path.Combine(rulesDir, "mapScripts.rul"), "FARM");
+            File.WriteAllText(Path.Combine(outDir, "mapscript-FARM.json"),
+                JsonConvert.SerializeObject(farmScript, Formatting.Indented));
+            written.Add("mapscript-FARM.json");
 
             // 3. Units: sprites -> atlas
             var unitFrames = PckDecoder.Load(

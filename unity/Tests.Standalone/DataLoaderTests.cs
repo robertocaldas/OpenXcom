@@ -252,5 +252,32 @@ namespace OpenXcom.Core.Tests
             Assert.Equal(20, craftBlock.Length);
             Assert.Equal(3, craftBlock.Height);
         }
+
+        [Fact]
+        public void LoadTerrain_RealCulta_CarriesTheFullBlockListAndScript()
+        {
+            Xcom.Convert.ConvertJob.Run(DataDir, TestPaths.RulesDir, TestPaths.CommonDir, _outDir);
+
+            var terrain = DataLoader.LoadTerrain(_outDir, "CULTA");
+
+            Assert.Equal("FARM", terrain.Script);
+            Assert.Equal(19, terrain.Blocks.Count);
+            Assert.Equal("CULTA00", terrain.Blocks[0].Name);
+            Assert.Contains(1, terrain.Blocks[0].Groups);
+        }
+
+        [Fact]
+        public void LoadMapScript_RealFarmScript_ThreeCommandsWithTypedEnum()
+        {
+            Xcom.Convert.ConvertJob.Run(DataDir, TestPaths.RulesDir, TestPaths.CommonDir, _outDir);
+
+            var script = DataLoader.LoadMapScript(_outDir, "FARM");
+
+            Assert.Equal(3, script.Count);
+            Assert.Equal(MapScriptCommandType.AddUfo, script[0].Type);
+            Assert.Equal(MapScriptCommandType.AddCraft, script[1].Type);
+            Assert.Equal(MapScriptCommandType.FillArea, script[2].Type);
+            Assert.Equal(18, script[2].Blocks.Count);
+        }
     }
 }

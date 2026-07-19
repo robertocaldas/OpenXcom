@@ -61,8 +61,68 @@ namespace OpenXcom.Core.Rules
             foreach (var d in raw.Datasets)
                 dataSets.Add(new MapDataSetInfo { Name = d.Name, Size = d.Size });
 
-            return new RuleTerrain(raw.Name, dataSets);
+            var blocks = new List<MapBlockInfo>();
+            if (raw.Blocks != null)
+                foreach (var b in raw.Blocks)
+                    blocks.Add(new MapBlockInfo { Name = b.Name, Width = b.Width, Length = b.Length, Groups = b.Groups });
+
+            return new RuleTerrain(raw.Name, dataSets, blocks, raw.Script);
         }
+
+        public static List<MapScriptCommand> LoadMapScript(string gameDataDir, string scriptName)
+        {
+            string path = Path.Combine(gameDataDir, $"mapscript-{scriptName}.json");
+            string json = File.ReadAllText(path);
+            var raw = JsonConvert.DeserializeObject<List<RawMapScriptCommand>>(json);
+
+            var result = new List<MapScriptCommand>(raw.Count);
+            foreach (var c in raw)
+            {
+                var rects = new List<MapScriptRect>();
+                if (c.Rects != null)
+                    foreach (var r in c.Rects)
+                        rects.Add(new MapScriptRect { X = r[0], Y = r[1], W = r[2], H = r[3] });
+
+                result.Add(new MapScriptCommand
+                {
+                    Type = ParseType(c.Type),
+                    Rects = rects,
+                    Groups = c.Groups ?? new List<int>(),
+                    Blocks = c.Blocks ?? new List<int>(),
+                    Freqs = c.Freqs ?? new List<int>(),
+                    MaxUses = c.MaxUses ?? new List<int>(),
+                    SizeX = c.SizeX,
+                    SizeY = c.SizeY,
+                    SizeZ = c.SizeZ,
+                    Direction = c.Direction switch
+                    {
+                        "vertical" => MapDirection.Vertical,
+                        "horizontal" => MapDirection.Horizontal,
+                        "both" => MapDirection.Both,
+                        _ => MapDirection.None,
+                    },
+                    Executions = c.Executions,
+                    ExecutionChances = c.ExecutionChances,
+                    Label = c.Label,
+                    Conditionals = c.Conditionals ?? new List<int>(),
+                });
+            }
+            return result;
+        }
+
+        private static MapScriptCommandType ParseType(string type) => type switch
+        {
+            "addBlock" => MapScriptCommandType.AddBlock,
+            "addLine" => MapScriptCommandType.AddLine,
+            "addCraft" => MapScriptCommandType.AddCraft,
+            "addUFO" => MapScriptCommandType.AddUfo,
+            "digTunnel" => MapScriptCommandType.DigTunnel,
+            "fillArea" => MapScriptCommandType.FillArea,
+            "checkBlock" => MapScriptCommandType.CheckBlock,
+            "removeBlock" => MapScriptCommandType.RemoveBlock,
+            "resize" => MapScriptCommandType.Resize,
+            _ => throw new System.InvalidOperationException($"Unknown map script command type: {type}"),
+        };
 
         public static RawMapBlockData LoadMapBlock(string gameDataDir, string blockName)
         {
@@ -169,10 +229,38 @@ namespace OpenXcom.Core.Rules
             public int Size { get; set; }
         }
 
+        private sealed class RawTerrainBlock
+        {
+            public string Name { get; set; }
+            public int Width { get; set; }
+            public int Length { get; set; }
+            public List<int> Groups { get; set; }
+        }
+
         private sealed class RawTerrainDatasets
         {
             public string Name { get; set; }
+            public string Script { get; set; }
             public List<RawDatasetInfo> Datasets { get; set; }
+            public List<RawTerrainBlock> Blocks { get; set; }
+        }
+
+        private sealed class RawMapScriptCommand
+        {
+            public string Type { get; set; }
+            public List<int[]> Rects { get; set; }
+            public List<int> Groups { get; set; }
+            public List<int> Blocks { get; set; }
+            public List<int> Freqs { get; set; }
+            public List<int> MaxUses { get; set; }
+            public int SizeX { get; set; }
+            public int SizeY { get; set; }
+            public int SizeZ { get; set; }
+            public string Direction { get; set; }
+            public int Executions { get; set; }
+            public int ExecutionChances { get; set; }
+            public int Label { get; set; }
+            public List<int> Conditionals { get; set; }
         }
 
         public sealed class RawMapBlockTile

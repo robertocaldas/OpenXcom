@@ -50,5 +50,37 @@ namespace OpenXcom.Core.Tests
 
             Assert.Equal(("A", 0), terrain.Resolve(999));
         }
+
+        [Fact]
+        public void PickRandomBlock_FiltersBySizeAndGroup_SyntheticBlocks()
+        {
+            var terrain = new RuleTerrain("TEST", new List<MapDataSetInfo> { new() { Name = "A", Size = 1 } },
+                blocks: new List<MapBlockInfo>
+                {
+                    new() { Name = "SMALL_GROUP1", Width = 10, Length = 10, Groups = new List<int> { 1 } },
+                    new() { Name = "SMALL_GROUP0", Width = 10, Length = 10, Groups = new List<int> { 0 } },
+                    new() { Name = "BIG_GROUP1", Width = 20, Length = 20, Groups = new List<int> { 1 } },
+                });
+
+            var rng = new OpenXcom.Core.Common.Rng(1);
+            for (int i = 0; i < 20; i++)
+            {
+                var picked = terrain.PickRandomBlock(rng, maxWidthTiles: 10, maxLengthTiles: 10, group: 1);
+                Assert.Equal("SMALL_GROUP1", picked.Name);
+            }
+        }
+
+        [Fact]
+        public void PickRandomBlock_NoCompliantBlock_ReturnsNull()
+        {
+            var terrain = new RuleTerrain("TEST", new List<MapDataSetInfo> { new() { Name = "A", Size = 1 } },
+                blocks: new List<MapBlockInfo>
+                {
+                    new() { Name = "ONLY", Width = 10, Length = 10, Groups = new List<int> { 0 } },
+                });
+
+            var rng = new OpenXcom.Core.Common.Rng(1);
+            Assert.Null(terrain.PickRandomBlock(rng, maxWidthTiles: 10, maxLengthTiles: 10, group: 99));
+        }
     }
 }
