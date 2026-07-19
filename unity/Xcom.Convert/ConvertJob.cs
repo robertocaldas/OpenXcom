@@ -156,15 +156,19 @@ namespace Xcom.Convert
             written.Add("bulletsprites.png");
             written.Add("bulletsprites.frames.json");
 
-            // 4. Mapblock CULTA00: .MAP + .RMP -> one JSON.
-            var block = MapBlockDecoder.LoadMap(
-                File.ReadAllBytes(Path.Combine(dataDir, "MAPS", "CULTA00.MAP")));
-            block.RouteNodes = MapBlockDecoder.LoadRmp(
-                File.ReadAllBytes(Path.Combine(dataDir, "ROUTES", "CULTA00.RMP")),
-                block.Width, block.Length, block.Height);
-            File.WriteAllText(Path.Combine(outDir, "mapblock-CULTA00.json"),
-                JsonConvert.SerializeObject(block, Formatting.Indented));
-            written.Add("mapblock-CULTA00.json");
+            // 4. All 19 real farmland mapblocks: .MAP + .RMP -> one JSON each.
+            for (int i = 0; i <= 18; i++)
+            {
+                string name = $"CULTA{i:D2}";
+                var farmBlock = MapBlockDecoder.LoadMap(
+                    File.ReadAllBytes(Path.Combine(dataDir, "MAPS", $"{name}.MAP")));
+                farmBlock.RouteNodes = MapBlockDecoder.LoadRmp(
+                    File.ReadAllBytes(Path.Combine(dataDir, "ROUTES", $"{name}.RMP")),
+                    farmBlock.Width, farmBlock.Length, farmBlock.Height);
+                File.WriteAllText(Path.Combine(outDir, $"mapblock-{name}.json"),
+                    JsonConvert.SerializeObject(farmBlock, Formatting.Indented));
+                written.Add($"mapblock-{name}.json");
+            }
 
             // 5. Rules: XCom soldier + Sectoid stats, soldier + Sectoid armor, rifle + plasma pistol.
             var soldier = RuleYamlDecoder.LoadSoldierUnit(Path.Combine(rulesDir, "soldiers.rul"), "STR_SOLDIER");

@@ -219,5 +219,22 @@ namespace OpenXcom.Core.Tests
             Assert.True(grid.At(0, 0, 0).WestWall.StopLOS);
             Assert.True(grid.At(0, 0, 0).BlocksSight);
         }
+
+        [Fact]
+        public void ConvertJob_WritesAllNineteenFarmlandMapblocks()
+        {
+            Xcom.Convert.ConvertJob.Run(DataDir, TestPaths.RulesDir, TestPaths.CommonDir, _outDir);
+
+            for (int i = 0; i <= 18; i++)
+            {
+                string name = $"CULTA{i:D2}";
+                string path = Path.Combine(_outDir, $"mapblock-{name}.json");
+                Assert.True(File.Exists(path), $"Expected {path} to exist.");
+
+                var block = DataLoader.LoadMapBlock(_outDir, name);
+                Assert.Equal(10, block.Width);
+                Assert.Equal(10, block.Length);
+            }
+        }
     }
 }

@@ -25,7 +25,10 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Contains(written, p => p == "terrain-BARN.png");
             Assert.Contains(written, p => p == "tiles-BARN.json");
             Assert.Contains(written, p => p == "terrain-CULTA.datasets.json");
-            Assert.Contains(written, p => p == "mapblock-CULTA00.json");
+            for (int i = 0; i <= 18; i++)
+            {
+                Assert.Contains(written, p => p == $"mapblock-CULTA{i:D2}.json");
+            }
             Assert.Contains(written, p => p == "units-XCOM_0.png");
             Assert.Contains(written, p => p == "units-XCOM_0.frames.json");
             Assert.Contains(written, p => p == "units-SECTOID.png");
@@ -46,11 +49,11 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Contains(written, p => p == "bulletsprites.frames.json");
             Assert.True(File.Exists(Path.Combine(outDir, "manifest.json")));
 
-            Assert.Equal(31, written.Count);
+            Assert.Equal(49, written.Count);
             var manifestJson = File.ReadAllText(Path.Combine(outDir, "manifest.json"));
             var manifest = Newtonsoft.Json.Linq.JObject.Parse(manifestJson);
             var files = manifest["files"].Select(t => t.ToString()).ToList();
-            Assert.Equal(31, files.Count);
+            Assert.Equal(49, files.Count);
 
             // icons.png: single 320x56 frame (no companion .TAB on disk).
             var iconsFramesJson = File.ReadAllText(Path.Combine(outDir, "icons.frames.json"));
@@ -120,7 +123,7 @@ namespace OpenXcom.Core.Tests.Convert
             Assert.Equal("BARN", dsArray[2]["Name"].ToString());
             Assert.Equal(29, (int)dsArray[2]["Size"]);
 
-            // mapblock-CULTA00.json: dims + the one real route node.
+            // mapblock-CULTA00.json: dims + the one real route node (sample check).
             var blockJson = File.ReadAllText(Path.Combine(outDir, "mapblock-CULTA00.json"));
             var block = Newtonsoft.Json.Linq.JObject.Parse(blockJson);
             Assert.Equal(10, (int)block["Width"]);
