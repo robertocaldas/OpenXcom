@@ -9,9 +9,21 @@ namespace OpenXcom.Core.Tests
     public class DataLoaderTests : IDisposable
     {
         private readonly string _dir = Path.Combine(Path.GetTempPath(), "dataloader-" + Guid.NewGuid());
+        private static readonly string DataDir = TestPaths.RawDataDir;
+        private readonly string _outDir = Path.Combine(Path.GetTempPath(), "dataloader-convertjob-" + Guid.NewGuid());
 
-        public DataLoaderTests() => Directory.CreateDirectory(_dir);
-        public void Dispose() => Directory.Delete(_dir, recursive: true);
+        public DataLoaderTests()
+        {
+            Directory.CreateDirectory(_dir);
+            Directory.CreateDirectory(_outDir);
+        }
+
+        public void Dispose()
+        {
+            Directory.Delete(_dir, recursive: true);
+            if (Directory.Exists(_outDir))
+                Directory.Delete(_outDir, recursive: true);
+        }
 
         [Fact]
         public void LoadTiles_ParsesFieldsAndBase64EncodedByteArray()
@@ -213,6 +225,32 @@ namespace OpenXcom.Core.Tests
             Assert.Equal(80, rifle.TuAimed);
             Assert.Equal(0, rifle.HandSprite);
             Assert.Equal(70, rifle.BulletSprite);
+        }
+
+        [Fact]
+        public void ConvertJob_WritesUfoAndCraftMapblocksAndTerrains()
+        {
+            Xcom.Convert.ConvertJob.Run(DataDir, TestPaths.RulesDir, TestPaths.CommonDir, _outDir);
+
+            var ufoTerrain = DataLoader.LoadTerrain(_outDir, "UFO1A");
+            Assert.Equal(2, ufoTerrain.DataSets.Count);
+            Assert.Equal("BLANKS", ufoTerrain.DataSets[0].Name);
+            Assert.Equal("UFO1", ufoTerrain.DataSets[1].Name);
+
+            var ufoBlock = DataLoader.LoadMapBlock(_outDir, "UFO1A");
+            Assert.Equal(10, ufoBlock.Width);
+            Assert.Equal(10, ufoBlock.Length);
+            Assert.Equal(3, ufoBlock.Height);
+
+            var craftTerrain = DataLoader.LoadTerrain(_outDir, "PLANE");
+            Assert.Equal(2, craftTerrain.DataSets.Count);
+            Assert.Equal("BLANKS", craftTerrain.DataSets[0].Name);
+            Assert.Equal("PLANE", craftTerrain.DataSets[1].Name);
+
+            var craftBlock = DataLoader.LoadMapBlock(_outDir, "PLANE");
+            Assert.Equal(10, craftBlock.Width);
+            Assert.Equal(20, craftBlock.Length);
+            Assert.Equal(3, craftBlock.Height);
         }
     }
 }

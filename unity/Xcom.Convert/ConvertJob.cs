@@ -170,6 +170,52 @@ namespace Xcom.Convert
                 written.Add($"mapblock-{name}.json");
             }
 
+            // 4b. Small Scout UFO (UFO1A) and Skyranger craft (PLANE) - each
+            // reuses the already-converted BLANKS dataset and adds one more
+            // (UFO1, PLANE), same PCK/MCD pipeline as farmland's CULTIVAT/BARN.
+            void ConvertMiniTerrain(string terrainName, string extraDatasetName, string blockName)
+            {
+                var frames = PckDecoder.Load(
+                    File.ReadAllBytes(Path.Combine(dataDir, "TERRAIN", $"{extraDatasetName}.PCK")),
+                    File.ReadAllBytes(Path.Combine(dataDir, "TERRAIN", $"{extraDatasetName}.TAB")), 32, 40);
+                var atlas = AtlasWriter.Build(frames, pal);
+                AtlasWriter.Save(atlas,
+                    Path.Combine(outDir, $"terrain-{extraDatasetName}.png"),
+                    Path.Combine(outDir, $"terrain-{extraDatasetName}.frames.json"));
+                written.Add($"terrain-{extraDatasetName}.png");
+                written.Add($"terrain-{extraDatasetName}.frames.json");
+
+                var tiles = McdDecoder.Load(File.ReadAllBytes(Path.Combine(dataDir, "TERRAIN", $"{extraDatasetName}.MCD")));
+                File.WriteAllText(Path.Combine(outDir, $"tiles-{extraDatasetName}.json"),
+                    JsonConvert.SerializeObject(tiles, Formatting.Indented));
+                written.Add($"tiles-{extraDatasetName}.json");
+
+                var miniTerrainInfo = new TerrainDatasetsInfo
+                {
+                    Name = terrainName,
+                    Datasets = new List<DatasetInfo>
+                    {
+                        new() { Name = "BLANKS", Size = datasetSizes[0].Size }, // BLANKS already converted above
+                        new() { Name = extraDatasetName, Size = tiles.Count },
+                    },
+                };
+                File.WriteAllText(Path.Combine(outDir, $"terrain-{terrainName}.datasets.json"),
+                    JsonConvert.SerializeObject(miniTerrainInfo, Formatting.Indented));
+                written.Add($"terrain-{terrainName}.datasets.json");
+
+                var mapBlock = MapBlockDecoder.LoadMap(
+                    File.ReadAllBytes(Path.Combine(dataDir, "MAPS", $"{blockName}.MAP")));
+                mapBlock.RouteNodes = MapBlockDecoder.LoadRmp(
+                    File.ReadAllBytes(Path.Combine(dataDir, "ROUTES", $"{blockName}.RMP")),
+                    mapBlock.Width, mapBlock.Length, mapBlock.Height);
+                File.WriteAllText(Path.Combine(outDir, $"mapblock-{blockName}.json"),
+                    JsonConvert.SerializeObject(mapBlock, Formatting.Indented));
+                written.Add($"mapblock-{blockName}.json");
+            }
+
+            ConvertMiniTerrain("UFO1A", "UFO1", "UFO1A");
+            ConvertMiniTerrain("PLANE", "PLANE", "PLANE");
+
             // 5. Rules: XCom soldier + Sectoid stats, soldier + Sectoid armor, rifle + plasma pistol.
             var soldier = RuleYamlDecoder.LoadSoldierUnit(Path.Combine(rulesDir, "soldiers.rul"), "STR_SOLDIER");
             var sectoidUnit = RuleYamlDecoder.LoadAlienUnit(Path.Combine(rulesDir, "units.rul"), "STR_SECTOID_SOLDIER");
