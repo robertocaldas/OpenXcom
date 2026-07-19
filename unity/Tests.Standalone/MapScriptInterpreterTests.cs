@@ -149,5 +149,55 @@ namespace OpenXcom.Core.Tests
             Assert.Contains(MapScriptCommandType.DigTunnel, layout.DeferredCommandsSkipped);
             Assert.Empty(layout.Pieces);
         }
+
+        [Fact]
+        public void EndToEnd_RealFarmScript_ProducesAFullyPopulatedNoOverlapMap()
+        {
+            var (farmland, craft, ufo, script) = LoadReal();
+            var layout = MapScriptInterpreter.Generate(farmland, script, 5, 5, craft, ufo, new Rng(99));
+
+            RuleTerrain TerrainByName(string name) => name switch
+            {
+                "CULTA" => farmland,
+                "PLANE" => craft,
+                "UFO1A" => ufo,
+                _ => throw new System.InvalidOperationException(name),
+            };
+            DataLoader.RawMapBlockData BlockByName(string name) => DataLoader.LoadMapBlock(_outDir, name);
+            IReadOnlyDictionary<string, List<MapDataTile>> DatasetTilesFor(string terrainName)
+            {
+                var t = TerrainByName(terrainName);
+                var result = new Dictionary<string, List<MapDataTile>>();
+                foreach (var ds in t.DataSets)
+                    result[ds.Name] = DataLoader.LoadTiles(_outDir, ds.Name);
+                return result;
+            }
+
+            var (grid, routeNodes) = MapGenerator.BuildFromLayout(layout, TerrainByName, BlockByName, DatasetTilesFor);
+
+            Assert.Equal(50, grid.Width);
+            Assert.Equal(50, grid.Length);
+
+            // Full occupancy: every 10x10 cell in the 5x5 block grid got a piece.
+            var occupiedCells = layout.Pieces.Where(p => p.BlockName != null).Select(p => (p.GridX, p.GridY)).Distinct().Count();
+            Assert.Equal(25, occupiedCells);
+
+            // No overlaps beyond the documented craft/UFO overlay: every cell has
+            // at most 2 pieces (its original filler, optionally overlaid once).
+            var perCell = layout.Pieces.Where(p => p.BlockName != null)
+                .GroupBy(p => (p.GridX, p.GridY)).ToDictionary(g => g.Key, g => g.Count());
+            Assert.True(perCell.Values.All(c => c <= 2), "Expected at most one overlay per cell.");
+
+            // Real route nodes exist across the generated map, not just one.
+            Assert.True(routeNodes.Count > 5, $"Expected many route nodes across a 5x5 map, got {routeNodes.Count}.");
+
+            // The whole battle floor has at least one walkable tile (sanity:
+            // this isn't an all-null grid).
+            bool foundWalkable = false;
+            for (int y = 0; y < grid.Length && !foundWalkable; y++)
+                for (int x = 0; x < grid.Width && !foundWalkable; x++)
+                    if (grid.At(x, y, 0)?.Walkable == true) foundWalkable = true;
+            Assert.True(foundWalkable);
+        }
     }
 }
