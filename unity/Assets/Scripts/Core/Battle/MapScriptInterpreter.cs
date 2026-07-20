@@ -39,10 +39,6 @@ namespace OpenXcom.Core.Battle
     /// </summary>
     public static class MapScriptInterpreter
     {
-        // Port of MapBlockType (src/Mod/MapBlock.h:28): the landing-zone
-        // filler group addCraft/addUFO default to.
-        private const int LandingZoneGroup = 1;
-
         public static GeneratedLayout Generate(
             RuleTerrain terrain, IReadOnlyList<MapScriptCommand> script,
             int mapSizeXBlocks, int mapSizeYBlocks,
@@ -146,9 +142,9 @@ namespace OpenXcom.Core.Battle
             // Final overlay pass: the real craft/UFO art on top of its
             // reserved footprint (BattlescapeGenerator.cpp:3278-3335).
             if (ufoFooter != null)
-                layout.Pieces.Add(new PlacedPiece { BlockName = "UFO1A", TerrainName = ufoTerrain.Name, GridX = ufoFooter.GridX, GridY = ufoFooter.GridY });
+                layout.Pieces.Add(new PlacedPiece { BlockName = ufoFooter.BlockName, TerrainName = ufoFooter.TerrainName, GridX = ufoFooter.GridX, GridY = ufoFooter.GridY });
             if (craftFooter != null)
-                layout.Pieces.Add(new PlacedPiece { BlockName = "PLANE", TerrainName = craftTerrain.Name, GridX = craftFooter.GridX, GridY = craftFooter.GridY });
+                layout.Pieces.Add(new PlacedPiece { BlockName = craftFooter.BlockName, TerrainName = craftFooter.TerrainName, GridX = craftFooter.GridX, GridY = craftFooter.GridY });
 
             return layout;
         }
@@ -223,8 +219,8 @@ namespace OpenXcom.Core.Battle
         /// size of the real craft/UFO block, filling it with the current
         /// terrain's own landing-zone (group 1) filler pieces. The real
         /// craft/UFO art is overlaid afterward by the caller (Generate's
-        /// final pass) - this method only returns the reserved footprint's
-        /// origin.
+        /// final pass), using the picked block's own name/terrain and the
+        /// footprint's origin, all returned here.
         /// </summary>
         private static PlacedPiece RunAddCraftOrUfo(RuleTerrain terrain, RuleTerrain vehicleTerrain, MapScriptCommand cmd,
             BlockPool fillerPool, bool[,] occupied, MapBlockInfo[,] placedAt, GeneratedLayout layout, Rng rng)
@@ -249,7 +245,7 @@ namespace OpenXcom.Core.Battle
                 }
             }
 
-            return new PlacedPiece { GridX = x, GridY = y };
+            return new PlacedPiece { BlockName = vehicleBlock.Name, TerrainName = vehicleTerrain.Name, GridX = x, GridY = y };
         }
 
         /// <summary>Port of BattlescapeGenerator::addLine (src/Battlescape/BattlescapeGenerator.cpp:4318-4418).</summary>
@@ -287,7 +283,6 @@ namespace OpenXcom.Core.Battle
                 placed = MapScriptPlacement.SelectPosition(rng, occupied, cmd.Rects, 10, 10, out roadX, out roadY);
                 if (placed)
                 {
-                    int iter = vertical ? roadY : roadX;
                     for (int i = 0; i < limit; i++)
                     {
                         int cx = vertical ? roadX : i;
@@ -363,7 +358,7 @@ namespace OpenXcom.Core.Battle
             return false;
         }
 
-        /// <summary>Port of BattlescapeGenerator::removeBlocks (src/Battlescape/BattlescapeGenerator.cpp:4618-4700ish).</summary>
+        /// <summary>Port of BattlescapeGenerator::removeBlocks (src/Battlescape/BattlescapeGenerator.cpp:4618-4710).</summary>
         private static bool RunRemoveBlocks(MapScriptCommand cmd, bool[,] occupied, MapBlockInfo[,] placedAt,
             GeneratedLayout layout, int mapW, int mapH)
         {

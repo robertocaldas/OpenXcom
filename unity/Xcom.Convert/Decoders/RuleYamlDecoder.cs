@@ -267,6 +267,7 @@ namespace Xcom.Convert.Decoders
 
                 cmd.Executions = c.Executions ?? 1;
                 cmd.ExecutionChances = c.ExecutionChances ?? 100;
+                // Port of MapScript::load's label field (src/Mod/MapScript.cpp:280).
                 cmd.Label = System.Math.Abs(c.Label ?? 0);
                 cmd.Conditionals = AsIntList(c.Conditionals, defaultWhenEmpty: null);
 

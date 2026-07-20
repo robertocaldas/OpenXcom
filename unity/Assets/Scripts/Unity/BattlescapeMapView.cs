@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using OpenXcom.Core.Battle;
 using OpenXcom.Core.Common;
 using OpenXcom.Core.Rules;
@@ -63,14 +62,10 @@ namespace OpenXcom.Unity
                 var tilesByDataset = new Dictionary<string, List<MapDataTile>>();
                 foreach (var ds in terrain.DataSets)
                 {
+                    tilesByDataset[ds.Name] = DataLoader.LoadTiles(gameDataDir, ds.Name);
                     if (!datasetAtlases.ContainsKey(ds.Name))
                     {
-                        tilesByDataset[ds.Name] = DataLoader.LoadTiles(gameDataDir, ds.Name);
                         datasetAtlases[ds.Name] = AtlasLoader.Load(gameDataDir, $"terrain-{ds.Name}");
-                    }
-                    else
-                    {
-                        tilesByDataset[ds.Name] = DataLoader.LoadTiles(gameDataDir, ds.Name);
                     }
                 }
                 datasetTilesByTerrain[terrain.Name] = tilesByDataset;

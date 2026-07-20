@@ -124,7 +124,7 @@ namespace OpenXcom.Core.Battle
         /// <summary>
         /// Resets one 10x10-tile grid cell (across every Z level) back to
         /// empty. A null-BlockName piece is a removeBlocks clear
-        /// (BattlescapeGenerator.cpp:4618-4700ish) applied to a cell an
+        /// (BattlescapeGenerator.cpp:4618-4710) applied to a cell an
         /// earlier piece already wrote tiles into, so the clear must reset
         /// those tiles rather than merely skip writing new ones.
         /// </summary>
