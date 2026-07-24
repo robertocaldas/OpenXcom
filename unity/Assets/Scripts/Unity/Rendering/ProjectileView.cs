@@ -48,7 +48,6 @@ namespace OpenXcom.Unity.Rendering
             var go = new GameObject("Bullet");
             go.transform.SetParent(transform, worldPositionStays: false);
             _dot = go.AddComponent<SpriteRenderer>();
-            _dot.sortingOrder = short.MaxValue; // always drawn above tiles/units - a bullet is never occluded mid-flight
             _dot.enabled = false;
         }
 
@@ -64,8 +63,8 @@ namespace OpenXcom.Unity.Rendering
         {
             var (fx, fy) = IsoProjection.VoxelWorldPosition(originVoxel.X, originVoxel.Y, originVoxel.Z, TileRenderer.PixelsPerUnit);
             var (tx, ty) = IsoProjection.VoxelWorldPosition(hitVoxel.X, hitVoxel.Y, hitVoxel.Z, TileRenderer.PixelsPerUnit);
-            _from = new Vector3(fx, fy, -0.01f);
-            _to = new Vector3(tx, ty, -0.01f);
+            _from = new Vector3(fx, fy, IsoProjection.AlwaysFrontDepth); // always drawn above tiles/units - a bullet is never occluded mid-flight
+            _to = new Vector3(tx, ty, IsoProjection.AlwaysFrontDepth);
             _duration = Mathf.Max(minFlightSeconds, Vector3.Distance(_from, _to) / worldUnitsPerSecond);
             _dot.sprite = Sprite.Create(_atlas.texture, _atlas.frameRects[bulletSpriteBase], new Vector2(0.5f, 0.5f), TileRenderer.PixelsPerUnit);
             _dot.enabled = true;

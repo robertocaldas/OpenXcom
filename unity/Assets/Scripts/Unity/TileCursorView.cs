@@ -59,12 +59,12 @@ namespace OpenXcom.Unity
             var backGo = new GameObject("Back");
             backGo.transform.SetParent(_container, worldPositionStays: false);
             _back = backGo.AddComponent<SpriteRenderer>();
-            _back.sortingOrder = short.MaxValue - 1;
+            _back.transform.localPosition = new Vector3(0f, 0f, IsoProjection.AlwaysNearFrontDepth);
 
             var frontGo = new GameObject("Front");
             frontGo.transform.SetParent(_container, worldPositionStays: false);
             _front = frontGo.AddComponent<SpriteRenderer>();
-            _front.sortingOrder = short.MaxValue;
+            _front.transform.localPosition = new Vector3(0f, 0f, IsoProjection.AlwaysFrontDepth);
         }
 
         private void Update()
@@ -89,14 +89,16 @@ namespace OpenXcom.Unity
 
             // Back layer must render BEHIND the unit standing on this tile (the
             // original's box appears to have the unit standing "inside" it),
-            // not above it like the front layer and every tile part - one less
-            // than the unit's own lowest part order guarantees that while
-            // staying above every tile part (UnitSortingOrder always exceeds
-            // any tile's SortingOrder in the same grid).
-            _back.sortingOrder = occupied
-                ? IsoProjection.UnitSortingOrder(hovered.Value.X, hovered.Value.Y, hovered.Value.Z,
-                    _mapWidth, _mapLength, IsoProjection.UnitPartRank.Legs) - 1
-                : short.MaxValue - 1;
+            // not above it like the front layer and every tile part - one step
+            // farther from the camera than the unit's own lowest part
+            // guarantees that while staying above every tile part
+            // (UnitPartDepth always exceeds any tile's PartDepth in the same
+            // grid).
+            var backLocalPos = _back.transform.localPosition;
+            backLocalPos.z = occupied
+                ? IsoProjection.CursorBackDepthBehindUnit(hovered.Value.X, hovered.Value.Y, hovered.Value.Z, _mapWidth, _mapLength)
+                : IsoProjection.AlwaysNearFrontDepth;
+            _back.transform.localPosition = backLocalPos;
 
             _back.sprite = FrameSprite(occupied ? (phase ? BackAnimFrameA : BackAnimFrameB) : BackStaticFrame);
             _front.sprite = FrameSprite(occupied ? (phase ? FrontAnimFrameA : FrontAnimFrameB) : FrontStaticFrame);

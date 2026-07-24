@@ -162,28 +162,91 @@ namespace OpenXcom.Unity.Rendering
             return (int)(unitBand + tileIndex * 5 + (int)part);
         }
 
-        private const float RaycastDepthStep = 0.001f;
+        // World-Z window that all sortable map content is packed into. The
+        // camera sits at Z=-10 looking toward +Z (near clip 0.3), so the
+        // visible range is roughly Z in (-9.7, +990); "closer to camera" =
+        // smaller (more negative) Z = drawn on top. Content is confined to
+        // (-DepthWindow, 0]; the always-front tiers sit just past it, still
+        // comfortably inside the frustum.
+        private const float DepthWindow = 6f;
+        private const float AlwaysFrontClearance = 1.5f; // gap between content and the always-front tiers
 
         /// <summary>
-        /// Small world-Z offset matching a tile's SortingOrder (camera sits at
-        /// Z=-10 looking toward +Z, so "closer to camera" = more negative Z).
-        /// Every tile/unit collider is otherwise placed at local Z=0 with the
-        /// same tiny size.z=0.1 - sortingOrder governs 2D DRAW order but has no
-        /// effect on Physics.Raycast, so without a matching physical Z offset,
-        /// a raycast at any screen point whose XY falls inside two overlapping
-        /// tile/unit colliders resolves via Unity's unspecified internal tie-
-        /// break, not by what's actually drawn on top. This produced both the
-        /// "clicks select the wrong unit" and "tile cursor lands on the wrong
-        /// tile" bugs.
+        /// A tile part's continuous world-Z depth - the same back-to-front
+        /// order as SortingOrder, but as a bounded float instead of an int
+        /// that silently wraps once it leaves Unity's internal 16-bit
+        /// sortingOrder storage (confirmed live on a multi-story map: a
+        /// craft's upper decks and every unit vanished because their raw
+        /// SortingOrder/UnitSortingOrder values overflowed that range).
+        ///
+        /// The raw sort value grows without bound with map size (up to
+        /// ~area*height*5), so a fixed per-unit step would, on a large map,
+        /// push far tiles and every unit past the camera plane entirely and
+        /// out of view. Dividing by the map footprint (mapWidth*mapLength)
+        /// makes the depth map-size-independent - it lands in a fixed
+        /// (-DepthWindow, 0] band that always stays inside the frustum -
+        /// while preserving the exact draw ORDER (division by a positive
+        /// constant is monotonic). Both the tile's collider (needs a
+        /// physical Z for Physics.Raycast) and its visual draw order (the
+        /// camera's custom-axis transparency sort, set up in CameraController)
+        /// read this same value, so they can never disagree.
+        /// </summary>
+        public static float PartDepth(int x, int y, int z, int mapWidth, int mapLength, PartRank part) =>
+            NormalizedDepth(SortingOrder(x, y, z, mapWidth, mapLength, part), mapWidth, mapLength);
+
+        // Scales a raw sort value into the (-DepthWindow, 0] band. The
+        // divisor 10 is the approximate maximum of sortValue/(area) across
+        // realistic maps (unit band contributes ~5, plus ~5 per vertical
+        // level), so DepthWindow/10 keeps content within the band with room
+        // for a few stacked floors.
+        private static float NormalizedDepth(long sortValue, int mapWidth, int mapLength) =>
+            -(DepthWindow / 10f) * (float)sortValue / (mapWidth * mapLength);
+
+        /// <summary>
+        /// The tile-collider Z (Object-rank depth). sortingOrder has no effect
+        /// on Physics.Raycast, so the collider needs a matching physical Z or
+        /// a raycast through two overlapping tile/unit colliders resolves via
+        /// Unity's unspecified internal tie-break, not by what's drawn on top
+        /// (this produced both the "clicks select the wrong unit" and "tile
+        /// cursor lands on the wrong tile" bugs). A raycast from the camera
+        /// returns the nearest hit = smallest Z = topmost, matching the sort.
         /// </summary>
         public static float RaycastDepth(int x, int y, int z, int mapWidth, int mapLength) =>
-            -RaycastDepthStep * SortingOrder(x, y, z, mapWidth, mapLength, PartRank.Object);
+            PartDepth(x, y, z, mapWidth, mapLength, PartRank.Object);
 
-        /// <summary>Unit equivalent of RaycastDepth - always closer to the camera than
-        /// any tile's RaycastDepth (UnitSortingOrder always exceeds any tile's
-        /// SortingOrder in the same grid), so a raycast prefers the unit standing
-        /// on a tile over the tile itself.</summary>
+        /// <summary>Unit body-part equivalent of PartDepth.</summary>
+        public static float UnitPartDepth(int x, int y, int z, int mapWidth, int mapLength, UnitPartRank part) =>
+            NormalizedDepth(UnitSortingOrder(x, y, z, mapWidth, mapLength, part), mapWidth, mapLength);
+
+        /// <summary>Unit equivalent of RaycastDepth - closer to the camera than
+        /// any tile's RaycastDepth in the same column, so a raycast prefers the
+        /// unit standing on a tile over the tile itself.</summary>
         public static float UnitRaycastDepth(int x, int y, int z, int mapWidth, int mapLength) =>
-            -RaycastDepthStep * UnitSortingOrder(x, y, z, mapWidth, mapLength, UnitPartRank.Torso);
+            UnitPartDepth(x, y, z, mapWidth, mapLength, UnitPartRank.Torso);
+
+        /// <summary>
+        /// A depth closer to the camera than any real tile/unit depth - the
+        /// continuous-depth replacement for the old "sortingOrder =
+        /// short.MaxValue" always-on-top trick (a fired bullet, the
+        /// tile-selector cursor, the path-preview arrows). Sits just past the
+        /// content band (which bottoms out near -DepthWindow) yet still inside
+        /// the camera frustum. AlwaysFrontDepth is the frontmost tier (bullet,
+        /// cursor front layer); AlwaysNearFrontDepth is one tier behind it
+        /// (cursor back layer over an empty tile, path-preview arrows) -
+        /// mirroring the old short.MaxValue / short.MaxValue-1 relationship.
+        /// </summary>
+        public const float AlwaysNearFrontDepth = -(DepthWindow + AlwaysFrontClearance);       // -7.5
+        public const float AlwaysFrontDepth = -(DepthWindow + AlwaysFrontClearance + 0.5f);    // -8.0
+
+        /// <summary>
+        /// The tile-selector cursor's back layer, when the hovered tile IS
+        /// occupied, must render behind that unit's own sprite (the unit
+        /// stands "inside" the cursor box) while still staying above every
+        /// tile part - a hair farther from the camera than the unit's own
+        /// lowest part (Legs), matching the old "UnitSortingOrder(...Legs) - 1"
+        /// raw-order trick (TileCursorView.Update).
+        /// </summary>
+        public static float CursorBackDepthBehindUnit(int x, int y, int z, int mapWidth, int mapLength) =>
+            UnitPartDepth(x, y, z, mapWidth, mapLength, UnitPartRank.Legs) + 0.01f;
     }
 }

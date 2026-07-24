@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using OpenXcom.Core.Battle;
 using OpenXcom.Core.Common;
 using OpenXcom.Core.Rules;
@@ -37,6 +38,22 @@ namespace OpenXcom.Unity
 
         /// <summary>Every placed piece's route nodes, offset into the merged grid. Populated by Awake().</summary>
         public IReadOnlyList<DataLoader.RawRouteNode> RouteNodes { get; private set; }
+
+        /// <summary>
+        /// The subset of RouteNodes that belong to the real craft piece
+        /// itself (its own .RMP data, spanning all of its floors) - used to
+        /// spawn soldiers by the Skyranger rather than scattered across
+        /// farmland. MapScriptInterpreter.Generate always appends the craft
+        /// piece last (BattlescapeGenerator.cpp:3278-3335's "overlay for
+        /// real at the very end"), and MapGenerator.BuildFromLayout appends
+        /// route nodes in that same piece order, so the craft's own nodes
+        /// are always the trailing slice of RouteNodes. Populated by
+        /// Awake().
+        /// </summary>
+        public IReadOnlyList<DataLoader.RawRouteNode> CraftRouteNodes { get; private set; }
+
+        /// <summary>RouteNodes minus CraftRouteNodes - every other placed piece's nodes (farmland, the UFO). Populated by Awake().</summary>
+        public IReadOnlyList<DataLoader.RawRouteNode> NonCraftRouteNodes { get; private set; }
 
         private void Awake()
         {
@@ -78,6 +95,13 @@ namespace OpenXcom.Unity
                 name => datasetTilesByTerrain[name]);
             Grid = grid;
             RouteNodes = routeNodes;
+
+            var craftPiece = layout.Pieces.LastOrDefault(p => p.TerrainName == craftTerrainName);
+            int craftNodeCount = craftPiece != null
+                ? DataLoader.LoadMapBlock(gameDataDir, craftPiece.BlockName).RouteNodes.Count
+                : 0;
+            CraftRouteNodes = routeNodes.Skip(routeNodes.Count - craftNodeCount).ToList();
+            NonCraftRouteNodes = routeNodes.Take(routeNodes.Count - craftNodeCount).ToList();
 
             for (int z = 0; z < Grid.Height; z++)
             {

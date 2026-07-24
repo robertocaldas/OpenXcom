@@ -140,12 +140,12 @@ namespace OpenXcom.Unity
             if (!deadTransform.TryGetComponent<UnitRenderer>(out var renderer))
                 return;
 
-            // Drop to tile-level (Object-rank) sorting order - see
-            // UnitRenderer.SetSortingOrder's doc comment for why a persisting
-            // corpse can't keep using the usual unit-band order.
+            // Drop to tile-level (Object-rank) depth - see
+            // UnitRenderer.SetDepth's doc comment for why a persisting
+            // corpse can't keep using the usual unit-band depth.
             var pos = unit.Position;
-            int corpseOrder = IsoProjection.SortingOrder(pos.X, pos.Y, pos.Z, _state.Grid.Width, _state.Grid.Length, IsoProjection.PartRank.Object);
-            renderer.SetSortingOrder(corpseOrder);
+            float corpseDepth = IsoProjection.PartDepth(pos.X, pos.Y, pos.Z, _state.Grid.Width, _state.Grid.Length, IsoProjection.PartRank.Object);
+            renderer.SetDepth(corpseDepth);
 
             renderer.SetDeathFrame(0);
             _timedSequences.Add(new TimedSequence
@@ -190,6 +190,15 @@ namespace OpenXcom.Unity
             _unitTransforms.Clear();
             foreach (var kv in unitTransforms)
                 _unitTransforms[kv.Key] = kv.Value;
+
+            // Select the first player unit at battle start, matching the
+            // original (a soldier is always the active selection when the
+            // battle opens). Without this nothing is selected until the
+            // player clicks a unit, so the camera has nothing to center on
+            // and move/fire input is inert.
+            _selected = null;
+            foreach (var unit in _state.Units)
+                if (unit.Faction == Faction.Player) { _selected = unit; break; }
         }
 
         /// <summary>Ends the player's turn. Same effect as pressing Backspace

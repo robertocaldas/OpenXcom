@@ -62,12 +62,11 @@ namespace OpenXcom.Unity
                 var arrowGo = new GameObject($"Arrow_{i}");
                 arrowGo.transform.SetParent(transform, worldPositionStays: false);
                 var renderer = arrowGo.AddComponent<SpriteRenderer>();
-                renderer.sortingOrder = short.MaxValue - 1; // below the tile cursor, above everything else
                 renderer.sprite = Sprite.Create(_pathAtlas.texture, _pathAtlas.frameRects[dirIndex], new Vector2(0.5f, 0f), TileRenderer.PixelsPerUnit);
                 renderer.color = affordability[i] == PathPreview.Affordability.Affordable ? Affordable : Unaffordable;
 
                 var (worldX, worldY) = IsoProjection.WorldPosition(step.Position.X, step.Position.Y, step.Position.Z, TileRenderer.PixelsPerUnit);
-                arrowGo.transform.localPosition = new Vector3(worldX, worldY, 0f);
+                arrowGo.transform.localPosition = new Vector3(worldX, worldY, IsoProjection.AlwaysNearFrontDepth); // below the tile cursor, above everything else
 
                 _arrows.Add(renderer);
             }

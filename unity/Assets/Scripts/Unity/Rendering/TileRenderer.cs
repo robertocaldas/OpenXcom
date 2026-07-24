@@ -90,24 +90,34 @@ namespace OpenXcom.Unity.Rendering
             Sprite westWallSprite, Sprite northWallSprite, Sprite objectSprite)
         {
             var (worldX, worldY) = IsoProjection.WorldPosition(x, y, z, PixelsPerUnit);
-            float depth = IsoProjection.RaycastDepth(x, y, z, mapWidth, mapLength);
+            float depth = IsoProjection.RaycastDepth(x, y, z, mapWidth, mapLength); // == PartDepth(..., Object)
             transform.localPosition = new Vector3(worldX, worldY, depth);
 
+            // Children are positioned relative to this root, whose own Z is
+            // fixed at the Object-rank depth above; each child's local Z is
+            // the delta needed to reach ITS part's real depth, so the actual
+            // world Z (root + local) matches PartDepth exactly for every
+            // part, driving the camera's custom-axis transparency sort
+            // (see CameraController) the same way sortingOrder used to -
+            // just without its 16-bit overflow ceiling.
             _floor.sprite = floorSprite;
             // Original: screenPosition.y - yOffset (SDL Y-down: subtracting moves
             // the sprite UP the physical screen). In Unity's now-correctly-oriented
             // Y-up world, "up" is +Y, so the offset's sign flips to +.
-            _floor.transform.localPosition = new Vector3(0f, floorYOffsetPixels / PixelsPerUnit, 0f);
-            _floor.sortingOrder = IsoProjection.SortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.Floor);
+            _floor.transform.localPosition = new Vector3(0f, floorYOffsetPixels / PixelsPerUnit, PartDepthOffset(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.Floor));
 
             _westWall.sprite = westWallSprite;
-            _westWall.sortingOrder = IsoProjection.SortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.WestWall);
+            _westWall.transform.localPosition = new Vector3(0f, 0f, PartDepthOffset(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.WestWall));
 
             _northWall.sprite = northWallSprite;
-            _northWall.sortingOrder = IsoProjection.SortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.NorthWall);
+            _northWall.transform.localPosition = new Vector3(0f, 0f, PartDepthOffset(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.NorthWall));
 
             _object.sprite = objectSprite;
-            _object.sortingOrder = IsoProjection.SortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.Object);
+            _object.transform.localPosition = new Vector3(0f, 0f, PartDepthOffset(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.Object));
         }
+
+        private static float PartDepthOffset(int x, int y, int z, int mapWidth, int mapLength, IsoProjection.PartRank part) =>
+            IsoProjection.PartDepth(x, y, z, mapWidth, mapLength, part)
+                - IsoProjection.PartDepth(x, y, z, mapWidth, mapLength, IsoProjection.PartRank.Object);
     }
 }

@@ -50,6 +50,7 @@ namespace OpenXcom.Unity
 
         private BattleController _battleController;
         private float _unitsPerSecond;
+        private bool _initialCentered;
 
         private void Awake()
         {
@@ -58,6 +59,18 @@ namespace OpenXcom.Unity
             var camera = GetComponent<Camera>();
             if (camera.orthographic)
                 camera.orthographicSize = orthographicSize;
+
+            // Every tile-part/unit-part sprite is positioned at a real world-Z
+            // depth (IsoProjection.PartDepth/UnitPartDepth) instead of relying
+            // solely on SpriteRenderer.sortingOrder, which silently wraps once
+            // a map/level is big enough to need a value outside Unity's
+            // internal 16-bit range (confirmed live: a multi-story map's upper
+            // floors and every unit vanished this way). Custom-axis sorting
+            // along Z (camera looks toward +Z, so more negative Z = closer =
+            // drawn on top) makes that real depth the thing that actually
+            // governs draw order, with no size ceiling.
+            camera.transparencySortMode = TransparencySortMode.CustomAxis;
+            camera.transparencySortAxis = new Vector3(0f, 0f, 1f);
         }
 
         private void Start()
@@ -70,6 +83,22 @@ namespace OpenXcom.Unity
 
         private void Update()
         {
+            // On the first frame a unit is selected, snap the camera onto it -
+            // the map is far larger than the view, and the squad spawns near
+            // the craft, nowhere near the map's authored (0,0) start position,
+            // so without this the battle opens looking at empty terrain with
+            // no soldiers on screen.
+            if (!_initialCentered)
+            {
+                if (_battleController == null)
+                    _battleController = FindFirstObjectByType<BattleController>();
+                if (_battleController?.Selected != null)
+                {
+                    CenterOnSelectedUnit();
+                    _initialCentered = true;
+                }
+            }
+
             HandleEdgeScroll();
             HandleKeyScroll();
             if (Input.GetKeyDown(KeyCode.Home)) // keyBattleCenterUnit default

@@ -17,13 +17,16 @@ namespace OpenXcom.Unity
     /// time.
     ///
     /// [SIMPLIFIED] Real deployment data would place soldiers at the
-    /// Skyranger's own door tiles and aliens at rank-filtered nodes (design
-    /// spec §6) - neither is converted this phase. Route nodes are split by
-    /// list order instead: the first quarter (biased toward wherever the
-    /// generator placed pieces earliest, which includes the craft/UFO's own
-    /// reserved footprint - see MapScriptInterpreter.Generate) go to
-    /// soldiers, the rest to Sectoids. Not a real "spawn near the craft"
-    /// rule, just an honest, working stand-in for one.
+    /// Skyranger's own specific door tiles and aliens at rank-filtered nodes
+    /// (design spec §6) - neither is converted this phase. Soldiers instead
+    /// get the craft's own real route nodes (BattlescapeMapView.
+    /// CraftRouteNodes), restricted to its ground level (Z=0): with no way
+    /// yet to hide upper floors from view (a separate, larger gap - every
+    /// floor always renders at once), a soldier placed on the Skyranger's
+    /// upper deck would be stuck visually buried in its own hull. Sectoids
+    /// get every other placed piece's nodes (farmland, the UFO). Not a real
+    /// "spawn near the craft" rule, just an honest, working stand-in for
+    /// one.
     /// </summary>
     [RequireComponent(typeof(BattlescapeMapView))]
     [RequireComponent(typeof(BattleController))]
@@ -58,9 +61,8 @@ namespace OpenXcom.Unity
             var state = new BattleState(grid);
             state.LoftData = DataLoader.LoadLoftemps(gameDataDir);
 
-            int splitIndex = mapView.RouteNodes.Count / 4;
-            var soldierNodes = mapView.RouteNodes.Take(splitIndex).ToList();
-            var sectoidNodes = mapView.RouteNodes.Skip(splitIndex).ToList();
+            var soldierNodes = mapView.CraftRouteNodes.Where(n => n.Z == 0).ToList();
+            var sectoidNodes = mapView.NonCraftRouteNodes;
 
             var soldierUnits = new List<BattleUnit>();
             for (int i = 0; i < SoldierCount; i++)

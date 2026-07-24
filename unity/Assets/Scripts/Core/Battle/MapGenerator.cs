@@ -7,8 +7,13 @@ namespace OpenXcom.Core.Battle
     /// <summary>
     /// Builds a TileGrid from a decoded mapblock + terrain dataset resolution.
     /// Port of the tile-resolution step of BattlescapeGenerator::loadMAP
-    /// (src/Battlescape/BattlescapeGenerator.cpp:2144-2160) for a single,
+    /// (src/Battlescape/BattlescapeGenerator.cpp:2146-2160) for a single,
     /// already-positioned mapblock (xoff=yoff=zoff=0 — no multi-block tiling).
+    /// A raw part value of 0 means "leave this tile part as it already is",
+    /// not "clear it" (same source, the `terrainObjectID>0` guard) — matters
+    /// once a piece is overlaid on top of previously-placed tiles, since a
+    /// mostly-hollow piece (e.g. a craft's landing-gear deck) must let the
+    /// terrain underneath show through rather than blanking it.
     /// </summary>
     public static class MapGenerator
     {
@@ -29,10 +34,10 @@ namespace OpenXcom.Core.Battle
                         var raw = block.Tiles[idx];
                         var tile = grid.At(x, y, z);
 
-                        tile.Floor = Resolve(raw.Floor, terrain, datasetTiles);
-                        tile.WestWall = Resolve(raw.WestWall, terrain, datasetTiles);
-                        tile.NorthWall = Resolve(raw.NorthWall, terrain, datasetTiles);
-                        tile.Object = Resolve(raw.Object, terrain, datasetTiles);
+                        if (raw.Floor > 0) tile.Floor = Resolve(raw.Floor, terrain, datasetTiles);
+                        if (raw.WestWall > 0) tile.WestWall = Resolve(raw.WestWall, terrain, datasetTiles);
+                        if (raw.NorthWall > 0) tile.NorthWall = Resolve(raw.NorthWall, terrain, datasetTiles);
+                        if (raw.Object > 0) tile.Object = Resolve(raw.Object, terrain, datasetTiles);
 
                         tile.Walkable = tile.Floor != null && !tile.Floor.NoFloor;
                         tile.BlocksSight = (tile.WestWall?.StopLOS ?? false)
@@ -94,10 +99,10 @@ namespace OpenXcom.Core.Battle
                             var tile = grid.At(xoff + x, yoff + y, z);
                             if (tile == null) continue; // outside the map's Z levels
 
-                            tile.Floor = Resolve(raw.Floor, terrain, datasetTiles);
-                            tile.WestWall = Resolve(raw.WestWall, terrain, datasetTiles);
-                            tile.NorthWall = Resolve(raw.NorthWall, terrain, datasetTiles);
-                            tile.Object = Resolve(raw.Object, terrain, datasetTiles);
+                            if (raw.Floor > 0) tile.Floor = Resolve(raw.Floor, terrain, datasetTiles);
+                            if (raw.WestWall > 0) tile.WestWall = Resolve(raw.WestWall, terrain, datasetTiles);
+                            if (raw.NorthWall > 0) tile.NorthWall = Resolve(raw.NorthWall, terrain, datasetTiles);
+                            if (raw.Object > 0) tile.Object = Resolve(raw.Object, terrain, datasetTiles);
 
                             tile.Walkable = tile.Floor != null && !tile.Floor.NoFloor;
                             tile.BlocksSight = (tile.WestWall?.StopLOS ?? false)

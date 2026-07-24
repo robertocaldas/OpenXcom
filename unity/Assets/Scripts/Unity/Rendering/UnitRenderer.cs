@@ -15,8 +15,8 @@ namespace OpenXcom.Unity.Rendering
     /// from BattleState's events and calls SetFrame/SetDeathFrame here.
     ///
     /// [SIMPLIFIED] The held item always draws frontmost (UnitPartRank.Item
-    /// is always the highest-ranked, highest-sortingOrder part - see
-    /// IsoProjection.UnitSortingOrder), regardless of facing direction. The
+    /// is always the highest-ranked, closest-to-camera part - see
+    /// IsoProjection.UnitPartDepth), regardless of facing direction. The
     /// real engine varies item-vs-body blit order per direction via an
     /// explicit case-0..7 table (UnitSprite.cpp:607-640). Always-frontmost
     /// is an acceptable cut for the two starter weapons this slice renders,
@@ -35,6 +35,7 @@ namespace OpenXcom.Unity.Rendering
         private (Texture2D texture, List<Rect> frameRects)? _itemAtlas;
         private RuleItem _heldWeapon;
         private int _standHeight;
+        private float _itemDepthOffset;
 
         private void Awake()
         {
@@ -78,15 +79,26 @@ namespace OpenXcom.Unity.Rendering
             _standHeight = standHeight;
 
             var (worldX, worldY) = IsoProjection.WorldPosition(x, y, z, TileRenderer.PixelsPerUnit);
-            float depth = IsoProjection.UnitRaycastDepth(x, y, z, mapWidth, mapLength);
+            float depth = IsoProjection.UnitRaycastDepth(x, y, z, mapWidth, mapLength); // == UnitPartDepth(..., Torso)
             transform.localPosition = new Vector3(worldX, worldY, depth);
 
-            _legs.sortingOrder = IsoProjection.UnitSortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.UnitPartRank.Legs);
-            _rightArm.sortingOrder = IsoProjection.UnitSortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.UnitPartRank.RightArm);
-            _torso.sortingOrder = IsoProjection.UnitSortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.UnitPartRank.Torso);
-            _leftArm.sortingOrder = IsoProjection.UnitSortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.UnitPartRank.LeftArm);
-            _item.sortingOrder = IsoProjection.UnitSortingOrder(x, y, z, mapWidth, mapLength, IsoProjection.UnitPartRank.Item);
+            // Same root-plus-delta scheme as TileRenderer: each body part's
+            // local Z is the offset from the root's Torso-rank depth needed
+            // to reach its own real depth, so the camera's custom-axis
+            // transparency sort orders body parts correctly without relying
+            // on sortingOrder (which silently wraps past Unity's 16-bit
+            // range on a large/multi-story map).
+            _legs.transform.localPosition = new Vector3(0f, 0f, UnitPartDepthOffset(x, y, z, mapWidth, mapLength, IsoProjection.UnitPartRank.Legs));
+            _rightArm.transform.localPosition = new Vector3(0f, 0f, UnitPartDepthOffset(x, y, z, mapWidth, mapLength, IsoProjection.UnitPartRank.RightArm));
+            _torso.transform.localPosition = new Vector3(0f, 0f, UnitPartDepthOffset(x, y, z, mapWidth, mapLength, IsoProjection.UnitPartRank.Torso));
+            _leftArm.transform.localPosition = new Vector3(0f, 0f, UnitPartDepthOffset(x, y, z, mapWidth, mapLength, IsoProjection.UnitPartRank.LeftArm));
+            _itemDepthOffset = UnitPartDepthOffset(x, y, z, mapWidth, mapLength, IsoProjection.UnitPartRank.Item);
+            _item.transform.localPosition = new Vector3(0f, 0f, _itemDepthOffset);
         }
+
+        private static float UnitPartDepthOffset(int x, int y, int z, int mapWidth, int mapLength, IsoProjection.UnitPartRank part) =>
+            IsoProjection.UnitPartDepth(x, y, z, mapWidth, mapLength, part)
+                - IsoProjection.UnitPartDepth(x, y, z, mapWidth, mapLength, IsoProjection.UnitPartRank.Torso);
 
         /// <summary>Renders the standing (walkPhase &lt; 0) or walking
         /// (walkPhase 0-7) pose facing direction (0-7). isAiming only affects
@@ -132,7 +144,7 @@ namespace OpenXcom.Unity.Rendering
                     // aiming offset - same SDL-pixel-space, Y-down convention
                     // as AimOffsetY, so negated the same way.
                     offY += -UnitSpriteFrames.HeldItemYOffset(_standHeight) / TileRenderer.PixelsPerUnit;
-                    _item.transform.localPosition = new Vector3(offX, offY, 0f);
+                    _item.transform.localPosition = new Vector3(offX, offY, _itemDepthOffset);
                 }
                 else
                 {
@@ -165,18 +177,23 @@ namespace OpenXcom.Unity.Rendering
         }
 
         /// <summary>Overrides the (only remaining visible, post-SetDeathFrame)
-        /// legs layer's sorting order - used to drop a corpse down to
-        /// tile-level (Object-rank) order instead of the usual unit-band
-        /// order (see BattleController.StartDeathSequence). A corpse now
+        /// legs layer's world-Z depth - used to drop a corpse down to
+        /// tile-level (Object-rank) depth instead of the usual unit-band
+        /// depth (see BattleController.StartDeathSequence). A corpse now
         /// persists indefinitely (it no longer despawns), so a live unit can
-        /// walk onto/through the same tile - IsoProjection.UnitSortingOrder's
+        /// walk onto/through the same tile - IsoProjection.UnitPartDepth's
         /// own doc comment assumes "no two units ever share a tileIndex,"
         /// which a lingering corpse plus a live unit on the same tile
-        /// violates, tying their sort order and leaving draw order
-        /// undefined. Object-rank keeps the corpse visible above the tile's
-        /// own floor/walls while guaranteeing it renders behind any live
-        /// unit on the same tile.</summary>
-        public void SetSortingOrder(int order) => _legs.sortingOrder = order;
+        /// violates, tying their depth and leaving draw order undefined.
+        /// Object-rank keeps the corpse visible above the tile's own
+        /// floor/walls while guaranteeing it renders behind any live unit on
+        /// the same tile.</summary>
+        public void SetDepth(float depth)
+        {
+            var pos = transform.localPosition;
+            transform.localPosition = new Vector3(pos.x, pos.y, depth);
+            _legs.transform.localPosition = new Vector3(_legs.transform.localPosition.x, _legs.transform.localPosition.y, 0f);
+        }
 
         private static Sprite FrameSprite((Texture2D texture, List<Rect> frameRects) atlas, int frameIndex) =>
             Sprite.Create(atlas.texture, atlas.frameRects[frameIndex], new Vector2(0.5f, 0f), TileRenderer.PixelsPerUnit);
