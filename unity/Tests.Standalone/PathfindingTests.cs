@@ -87,11 +87,68 @@ namespace OpenXcom.Core.Tests
             var floor = new MapDataTile { TuWalk = 4 };
             for (int x = 0; x < 3; x++)
                 grid.At(x, 0, 0).Floor = floor;
-            grid.At(1, 0, 0).WestWall = new MapDataTile(); // blocks moving west from (1,0,0)
+            grid.At(1, 0, 0).WestWall = new MapDataTile { TuWalk = 255 }; // solid wall blocks moving west
 
             var path = Pathfinding.FindPath(grid, new Position(1, 0, 0), new Position(0, 0, 0));
 
             Assert.Null(path);
+        }
+
+        [Fact]
+        public void FindPath_SolidObjectBlocksTheTile()
+        {
+            // 3x1 corridor with a solid object (e.g. a tree, TuWalk=255) on the
+            // middle tile; no way around it in a 1-row grid.
+            var grid = new TileGrid(3, 1, 1);
+            var floor = new MapDataTile { TuWalk = 4 };
+            for (int x = 0; x < 3; x++)
+                grid.At(x, 0, 0).Floor = floor;
+            grid.At(1, 0, 0).Object = new MapDataTile { TuWalk = 255 };
+
+            var path = Pathfinding.FindPath(grid, new Position(0, 0, 0), new Position(2, 0, 0));
+
+            Assert.Null(path);
+        }
+
+        [Fact]
+        public void FindPath_PassableObjectAddsItsWalkCost()
+        {
+            // A bush (passable object, TuWalk=6) on the destination tile costs
+            // floor(4) + object(6) = 10 to enter.
+            var grid = MakeOpenGrid();
+            grid.At(1, 0, 0).Object = new MapDataTile { TuWalk = 6 };
+
+            int? cost = Pathfinding.StepCost(grid, new Position(0, 0, 0), 2 /* East */);
+
+            Assert.Equal(10, cost);
+        }
+
+        [Fact]
+        public void StepCost_BlockBigWall_StopsDiagonalCornerCutButNotCardinalEntry()
+        {
+            // A BLOCK big wall (bigWall=1) sitting on (1,0,0) can be walked onto
+            // cardinally, but a diagonal step from (0,0,0) to (1,1,0) may not cut
+            // the corner around it.
+            var grid = MakeOpenGrid();
+            grid.At(1, 0, 0).Object = new MapDataTile { BigWall = 1, TuWalk = 4 };
+
+            Assert.Null(Pathfinding.StepCost(grid, new Position(0, 0, 0), 3 /* SE, cuts the corner */));
+            Assert.NotNull(Pathfinding.StepCost(grid, new Position(0, 0, 0), 2 /* East, straight onto it */));
+        }
+
+        [Fact]
+        public void StepCost_WestEdgeBigWall_BlocksOnlyItsOwnEdge()
+        {
+            // A west-edge big wall (bigWall=4) on (1,2,0) seals the boundary
+            // between it and the tile to its west - so a step west out of it (and,
+            // symmetrically, a step east into it) is blocked - but its east edge
+            // is open, so stepping further east is fine.
+            var grid = MakeOpenGrid();
+            grid.At(1, 2, 0).Object = new MapDataTile { BigWall = 4 };
+
+            Assert.Null(Pathfinding.StepCost(grid, new Position(1, 2, 0), 6 /* West, crosses the sealed edge */));
+            Assert.Null(Pathfinding.StepCost(grid, new Position(0, 2, 0), 2 /* East into the sealed edge */));
+            Assert.NotNull(Pathfinding.StepCost(grid, new Position(1, 2, 0), 2 /* East out the open edge */));
         }
 
         [Fact]
